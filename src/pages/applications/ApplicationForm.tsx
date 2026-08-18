@@ -21,6 +21,7 @@ import {
   Empty,
   Tooltip,
   Collapse,
+  AutoComplete,
 } from 'antd'
 import {
   SaveOutlined,
@@ -60,6 +61,7 @@ import {
   getAllMaterials,
   SpecialExtraMaterials as SpecialExtraMaterialsList,
   CultureMaterials as CultureMaterialsList,
+  MockTeamPresets,
   type MaterialItem,
 } from '../../mock/data'
 import { formatMoney, genId, nowStr } from '../../utils'
@@ -140,6 +142,55 @@ export default function ApplicationForm({ mode }: Props) {
       setPreCheck(editingApp.preCheck || {})
     }
   }, [editingApp, form])
+
+  // 选择预填报团信息后自动加载团数据
+  const handleTeamSelect = (teamName: string) => {
+    const preset = MockTeamPresets.find((t) => t.teamName === teamName)
+    if (!preset) return
+    form.setFieldsValue({
+      teamName: preset.teamName,
+      teamSize: preset.teamSize,
+      inboundTourists: preset.inboundTourists,
+      stayDays: preset.stayDays,
+      travelStart: preset.travelStart ? dayjs(preset.travelStart) : undefined,
+      travelEnd: preset.travelEnd ? dayjs(preset.travelEnd) : undefined,
+      travelDesc: preset.travelDesc,
+      dispatchNo: preset.dispatchNo,
+      targetAgreementNo: preset.targetAgreementNo,
+      flightNo: preset.flightNo,
+      trainNo: preset.trainNo,
+    })
+    setTourists(preset.tourists.map((t) => ({ ...t })))
+    setScenics(preset.scenics.map((s) => ({ ...s })))
+    setAccommodations(preset.accommodations.map((a) => ({ ...a })))
+    setGuideDrivers(preset.guideDrivers.map((g) => ({ ...g })))
+    message.success(`已加载团信息：${preset.teamName}`)
+  }
+
+  // 团信息下拉选项
+  const teamOptions = MockTeamPresets.map((t) => ({ value: t.teamName, label: t.teamName }))
+
+  // 新增模式下自动加载企业资质证照到附件列表
+  useEffect(() => {
+    if (mode !== 'new' || editingApp) return
+    const certs = [enterpriseProfile.businessLicense, enterpriseProfile.travelLicense, enterpriseProfile.legalRepId].filter(Boolean) as Attachment[]
+    if (certs.length === 0) return
+    setAttachments((prev) => {
+      const existingUids = new Set(prev.map((a) => a.uid))
+      const toAdd = certs.filter((c) => !existingUids.has(c.uid))
+      return toAdd.length > 0 ? [...prev, ...toAdd.map((c) => ({ ...c }))] : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  // 调用企业资质档案中的证照到附件列表
+  const loadEnterpriseCert = (cert: Attachment) => {
+    setAttachments((prev) => {
+      if (prev.some((a) => a.uid === cert.uid)) return prev
+      return [...prev, { ...cert }]
+    })
+    message.success(`已调用档案：${cert.name}`)
+  }
 
   // 实时校验
   useEffect(() => {
@@ -374,9 +425,6 @@ export default function ApplicationForm({ mode }: Props) {
         idNumber: '',
         nationality: '',
         sourcePlace: '',
-        checkInDate: '',
-        checkOutDate: '',
-        scenicEnterTime: '',
       },
     ])
   }
@@ -531,45 +579,6 @@ export default function ApplicationForm({ mode }: Props) {
         />
       ),
       dataIndex: 'sourcePlace',
-    },
-    {
-      title: '入住时间',
-      width: 130,
-      render: (v: string, r: TouristItem) => (
-        <Input
-          value={v || ''}
-          onChange={(e) => updateTourist(r.key, 'checkInDate', e.target.value)}
-          placeholder="YYYY-MM-DD"
-          size="small"
-        />
-      ),
-      dataIndex: 'checkInDate',
-    },
-    {
-      title: '退房时间',
-      width: 130,
-      render: (v: string, r: TouristItem) => (
-        <Input
-          value={v || ''}
-          onChange={(e) => updateTourist(r.key, 'checkOutDate', e.target.value)}
-          placeholder="YYYY-MM-DD"
-          size="small"
-        />
-      ),
-      dataIndex: 'checkOutDate',
-    },
-    {
-      title: '进入景区时间',
-      width: 150,
-      render: (v: string, r: TouristItem) => (
-        <Input
-          value={v || ''}
-          onChange={(e) => updateTourist(r.key, 'scenicEnterTime', e.target.value)}
-          placeholder="YYYY-MM-DD HH:mm"
-          size="small"
-        />
-      ),
-      dataIndex: 'scenicEnterTime',
     },
     {
       title: '操作',
@@ -848,7 +857,7 @@ export default function ApplicationForm({ mode }: Props) {
 
                     {/* 奖励类别专属字段 */}
                     <Card title="二、申报信息" size="small" style={{ marginBottom: 16 }}>
-                      <CategoryFields category={activeCategory} form={form} />
+                      <CategoryFields category={activeCategory} form={form} onTeamSelect={handleTeamSelect} teamOptions={teamOptions} />
                     </Card>
 
                     {/* 团队/行程信息 */}
@@ -912,7 +921,7 @@ export default function ApplicationForm({ mode }: Props) {
                               type="info"
                               showIcon
                               message="游客名单字段说明"
-                              description="根据政策附件2要求，游客名单须包含：姓名、证件类型、证件号、国籍/地区、客源地、入住/退房时间、进入景区时间。"
+                              description="根据政策附件2要求，游客名单须包含：姓名、证件类型、证件号、国籍/地区、客源地。"
                               style={{ marginBottom: 12 }}
                             />
                             <Table
@@ -1194,66 +1203,39 @@ export default function ApplicationForm({ mode }: Props) {
                         <Col span={8}>
                           <Card size="small" title="企业营业执照" extra={enterpriseProfile.businessLicense ? <Tag color="green">已存档</Tag> : <Tag color="orange">未存档</Tag>}>
                             {enterpriseProfile.businessLicense ? (
-                              <Space direction="vertical">
-                                <Text>{enterpriseProfile.businessLicense.name}</Text>
-                                <Button type="link" size="small">调用档案</Button>
+                              <Space direction="vertical" style={{ width: '100%' }}>
+                                <Text style={{ fontSize: 12 }}>{enterpriseProfile.businessLicense.name}</Text>
+                                <Button type="link" size="small" onClick={() => loadEnterpriseCert(enterpriseProfile.businessLicense!)}>调用档案</Button>
+                                {renderUploadArea('base', undefined, '企业营业执照')}
                               </Space>
                             ) : (
-                              <Space direction="vertical" style={{ width: '100%' }}>
-                                <Upload {...uploadByGroup('base', '企业营业执照')}>
-                                  <Button size="small" icon={<UploadOutlined />}>上传营业执照</Button>
-                                </Upload>
-                                {getAttachmentsByGroup('base', '企业营业执照').map((a) => (
-                                  <Space key={a.uid} style={{ fontSize: 12 }}>
-                                    <Text style={{ fontSize: 12 }} ellipsis>{a.name}</Text>
-                                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeAttachment(a.uid)} />
-                                  </Space>
-                                ))}
-                              </Space>
+                              renderUploadArea('base', undefined, '企业营业执照')
                             )}
                           </Card>
                         </Col>
                         <Col span={8}>
                           <Card size="small" title="旅行社业务经营许可证" extra={enterpriseProfile.travelLicense ? <Tag color="green">已存档</Tag> : <Tag color="orange">未存档</Tag>}>
                             {enterpriseProfile.travelLicense ? (
-                              <Space direction="vertical">
-                                <Text>{enterpriseProfile.travelLicense.name}</Text>
-                                <Button type="link" size="small">调用档案</Button>
+                              <Space direction="vertical" style={{ width: '100%' }}>
+                                <Text style={{ fontSize: 12 }}>{enterpriseProfile.travelLicense.name}</Text>
+                                <Button type="link" size="small" onClick={() => loadEnterpriseCert(enterpriseProfile.travelLicense!)}>调用档案</Button>
+                                {renderUploadArea('base', undefined, '旅行社业务经营许可证')}
                               </Space>
                             ) : (
-                              <Space direction="vertical" style={{ width: '100%' }}>
-                                <Upload {...uploadByGroup('base', '旅行社业务经营许可证')}>
-                                  <Button size="small" icon={<UploadOutlined />}>上传许可证</Button>
-                                </Upload>
-                                {getAttachmentsByGroup('base', '旅行社业务经营许可证').map((a) => (
-                                  <Space key={a.uid} style={{ fontSize: 12 }}>
-                                    <Text style={{ fontSize: 12 }} ellipsis>{a.name}</Text>
-                                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeAttachment(a.uid)} />
-                                  </Space>
-                                ))}
-                              </Space>
+                              renderUploadArea('base', undefined, '旅行社业务经营许可证')
                             )}
                           </Card>
                         </Col>
                         <Col span={8}>
                           <Card size="small" title="法定代表人身份证" extra={enterpriseProfile.legalRepId ? <Tag color="green">已存档</Tag> : <Tag color="orange">未存档</Tag>}>
                             {enterpriseProfile.legalRepId ? (
-                              <Space direction="vertical">
-                                <Text>{enterpriseProfile.legalRepId.name}</Text>
-                                <Button type="link" size="small">调用档案</Button>
+                              <Space direction="vertical" style={{ width: '100%' }}>
+                                <Text style={{ fontSize: 12 }}>{enterpriseProfile.legalRepId.name}</Text>
+                                <Button type="link" size="small" onClick={() => loadEnterpriseCert(enterpriseProfile.legalRepId!)}>调用档案</Button>
+                                {renderUploadArea('base', undefined, '法定代表人身份证')}
                               </Space>
                             ) : (
-                              <Space direction="vertical" style={{ width: '100%' }}>
-                                <Upload {...uploadByGroup('base', '法定代表人身份证')}>
-                                  <Button size="small" icon={<UploadOutlined />}>上传身份证</Button>
-                                </Upload>
-                                {getAttachmentsByGroup('base', '法定代表人身份证').map((a) => (
-                                  <Space key={a.uid} style={{ fontSize: 12 }}>
-                                    <Text style={{ fontSize: 12 }} ellipsis>{a.name}</Text>
-                                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeAttachment(a.uid)} />
-                                  </Space>
-                                ))}
-                              </Space>
+                              renderUploadArea('base', undefined, '法定代表人身份证')
                             )}
                           </Card>
                         </Col>
@@ -1338,7 +1320,7 @@ export default function ApplicationForm({ mode }: Props) {
                             type="info"
                             showIcon
                             message="住宿情况证明"
-                            description="申请奖励团组的旅客名单（包含旅客姓名、客源地、证件号、入住/退房时间等信息）加盖酒店销售部门或前台公章。"
+                            description="申请奖励团组的旅客名单（包含旅客姓名、客源地、证件号等信息）加盖酒店销售部门或前台公章。"
                             style={{ marginBottom: 12 }}
                           />
                           {renderUploadArea('accommodation', '含酒店公章', '住宿情况证明')}
@@ -1515,14 +1497,19 @@ export default function ApplicationForm({ mode }: Props) {
 }
 
 // 类别专属字段
-function CategoryFields({ category }: { category: RewardCategory; form: any }) {
+function CategoryFields({ category, onTeamSelect, teamOptions }: { category: RewardCategory; form: any; onTeamSelect?: (teamName: string) => void; teamOptions?: { value: string; label: string }[] }) {
   switch (category) {
     case 'team_reception':
       return (
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="团队/项目名称" name="teamName" rules={[{ required: true }]}>
-              <Input placeholder="如：韩国首尔-贵州5日游" />
+              <AutoComplete
+                options={teamOptions}
+                placeholder="选择已填报的团或手动输入"
+                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                onSelect={onTeamSelect}
+              />
             </Form.Item>
           </Col>
           <Col span={4}>
@@ -1572,7 +1559,12 @@ function CategoryFields({ category }: { category: RewardCategory; form: any }) {
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="团队/项目名称" name="teamName" rules={[{ required: true }]}>
-              <Input />
+              <AutoComplete
+                options={teamOptions}
+                placeholder="选择已填报的团或手动输入"
+                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                onSelect={onTeamSelect}
+              />
             </Form.Item>
           </Col>
           <Col span={6}>
@@ -1622,7 +1614,12 @@ function CategoryFields({ category }: { category: RewardCategory; form: any }) {
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="团队/项目名称" name="teamName" rules={[{ required: true }]}>
-              <Input />
+              <AutoComplete
+                options={teamOptions}
+                placeholder="选择已填报的团或手动输入"
+                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                onSelect={onTeamSelect}
+              />
             </Form.Item>
           </Col>
           <Col span={4}>
@@ -1657,7 +1654,12 @@ function CategoryFields({ category }: { category: RewardCategory; form: any }) {
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="团队/项目名称" name="teamName" rules={[{ required: true }]}>
-              <Input />
+              <AutoComplete
+                options={teamOptions}
+                placeholder="选择已填报的团或手动输入"
+                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                onSelect={onTeamSelect}
+              />
             </Form.Item>
           </Col>
           <Col span={4}>
@@ -1692,7 +1694,12 @@ function CategoryFields({ category }: { category: RewardCategory; form: any }) {
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="团队/项目名称" name="teamName" rules={[{ required: true }]}>
-              <Input />
+              <AutoComplete
+                options={teamOptions}
+                placeholder="选择已填报的团或手动输入"
+                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                onSelect={onTeamSelect}
+              />
             </Form.Item>
           </Col>
           <Col span={6}>
@@ -1732,7 +1739,12 @@ function CategoryFields({ category }: { category: RewardCategory; form: any }) {
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="团队/项目名称" name="teamName" rules={[{ required: true }]}>
-              <Input />
+              <AutoComplete
+                options={teamOptions}
+                placeholder="选择已填报的团或手动输入"
+                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                onSelect={onTeamSelect}
+              />
             </Form.Item>
           </Col>
           <Col span={4}>

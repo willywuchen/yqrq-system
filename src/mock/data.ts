@@ -1,4 +1,4 @@
-import type { Application, Message, RewardCategory } from '../types';
+import type { Application, Complaint, Message, RewardCategory, TouristItem, ScenicInfo, AccommodationInfo, GuideDriverInfo, Attachment, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleLog } from '../types';
 import { POLICY_CONSTANTS } from '../types';
 
 // 当前年度预算（万元）
@@ -664,4 +664,1382 @@ export const MockMessages: Message[] = [
     createTime: '2025-10-25 16:00:00',
     applicationId: 'APP202601003',
   },
+];
+
+// ========== Mock 投诉台账数据 ==========
+export const MockComplaints: Complaint[] = [
+  {
+    id: 'TS-20260801-0001',
+    title: '旅行社擅自变更行程路线',
+    province: '贵州省',
+    city: '贵阳市',
+    district: '南明区',
+    complaintMethod: 'hotline_12345',
+    tourismCategory: 'travel_agency',
+    complaintTime: '2026-08-01',
+    status: 'closed',
+    complainant: {
+      name: '张三',
+      gender: 'male',
+      phone: '138****5678',
+      email: 'zhangsan@example.com',
+      address: '四川省成都市武侯区XX路10号',
+      contractDate: '2026-07-20',
+    },
+    respondent: {
+      name: '贵州阳光国际旅行社',
+      address: '贵阳市南明区花果园大街1号',
+      phone: '0851-85123456',
+    },
+    content: '本人参加贵州阳光国际旅行社组织的"黄果树-荔波5日游"旅行团，合同约定第三天游览黄果树瀑布景区，但导游在未征得游客同意的情况下擅自将行程变更为购物点，严重违反合同约定。',
+    requests: '要求旅行社退还购物点相关费用并赔偿精神损失',
+    handlerOpinion: '经核实，该旅行社确实存在擅自变更行程的行为，已约谈旅行社负责人，要求整改并退还相关费用。',
+    reviewerOpinion: '同意办理意见，责成旅行社7个工作日内完成退款。',
+    replyStatus: 'closed',
+    replyTime: '2026-08-10',
+    replyContent: '已协调旅行社退还购物点费用共计500元/人，游客表示满意。',
+    attachments: [
+      { uid: 'c1', name: '旅游合同扫描件.pdf', size: 524288, type: 'application/pdf', uploadTime: '2026-08-01 10:00:00', title: '旅游合同' },
+      { uid: 'c2', name: '行程变更照片.jpg', size: 102400, type: 'image/jpeg', uploadTime: '2026-08-01 10:01:00', title: '现场照片' },
+    ],
+    remark: '游客通过12345热线投诉，工单编号：GZ20260801001',
+    createdBy: '管理员',
+    createTime: '2026-08-01 10:05:00',
+    updateTime: '2026-08-10 16:00:00',
+    operationLogs: [
+      { id: 'ol1', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-01 10:05:00' },
+      { id: 'ol2', operator: '管理员', action: 'process', summary: '填写办理意见', time: '2026-08-05 14:00:00' },
+      { id: 'ol3', operator: '管理员', action: 'review', summary: '负责人审核通过', time: '2026-08-06 10:00:00' },
+      { id: 'ol4', operator: '管理员', action: 'close', summary: '办结归档', time: '2026-08-10 16:00:00' },
+    ],
+  },
+  {
+    id: 'TS-20260805-0002',
+    title: '景区门票价格未公示',
+    province: '贵州省',
+    city: '安顺市',
+    district: '镇宁布依族苗族自治县',
+    complaintMethod: 'hotline_12345',
+    tourismCategory: 'scenic_area',
+    complaintTime: '2026-08-05',
+    status: 'processing',
+    complainant: {
+      name: '李四',
+      gender: 'female',
+      phone: '139****1234',
+      contractDate: '2026-08-03',
+    },
+    respondent: {
+      name: '黄果树瀑布景区',
+      address: '安顺市镇宁布依族苗族自治县黄果树镇',
+      phone: '0851-33591111',
+    },
+    content: '黄果树瀑布景区入口处未见门票价格公示牌，游客无法了解票价信息，且窗口售票人员未主动告知优惠政策。',
+    requests: '要求景区规范价格公示，并退还多收的门票费用',
+    handlerOpinion: '已联系景区管理处核实情况，景区承认公示牌存在损坏正在更换中。已要求景区加快整改进度。',
+    replyStatus: 'none',
+    attachments: [
+      { uid: 'c3', name: '景区入口照片.jpg', size: 204800, type: 'image/jpeg', uploadTime: '2026-08-05 09:30:00', title: '现场照片' },
+    ],
+    createdBy: '管理员',
+    createTime: '2026-08-05 09:35:00',
+    updateTime: '2026-08-08 15:00:00',
+    operationLogs: [
+      { id: 'ol5', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-05 09:35:00' },
+      { id: 'ol6', operator: '管理员', action: 'process', summary: '填写办理意见', time: '2026-08-08 15:00:00' },
+    ],
+  },
+  {
+    id: 'TS-20260720-0003',
+    title: '导游强制购物投诉',
+    province: '贵州省',
+    city: '黔东南苗族侗族自治州',
+    district: '雷山县',
+    complaintMethod: 'phone',
+    tourismCategory: 'tour_guide',
+    complaintTime: '2026-07-20',
+    status: 'replied',
+    complainant: {
+      name: '王五',
+      gender: 'male',
+      phone: '137****8888',
+      email: 'wangwu@example.com',
+      address: '湖南省长沙市岳麓区XX路20号',
+      contractDate: '2026-07-15',
+    },
+    respondent: {
+      name: '导游李某（执业证号：D-5201-000123）',
+      address: '贵阳市云岩区',
+      phone: '136****0001',
+    },
+    content: '在参加西江千户苗寨一日游过程中，导游李某多次强制安排购物行程，言语威胁不购物就不安排午餐，严重损害游客权益。',
+    requests: '要求查处导游违规行为，退还强制购物费用',
+    handlerOpinion: '经调查，导游李某确实存在强制购物行为。已将情况通报旅游执法大队，拟对李某进行行政处罚。',
+    reviewerOpinion: '同意办理意见，依法依规处理。',
+    isTransferredToCase: true,
+    suspectedIssue: '导游强制购物，违反《旅游法》第三十五条',
+    replyStatus: 'replied',
+    replyTime: '2026-08-01',
+    replyContent: '已对导游李某立案调查，强制购物费用共计1200元已退还投诉人。',
+    attachments: [
+      { uid: 'c4', name: '购物小票.jpg', size: 51200, type: 'image/jpeg', uploadTime: '2026-07-20 14:00:00', title: '购物凭证' },
+      { uid: 'c5', name: '导游证件照片.jpg', size: 81920, type: 'image/jpeg', uploadTime: '2026-07-20 14:01:00', title: '导游证' },
+    ],
+    remark: '诉转案，已转执法大队处理',
+    createdBy: '管理员',
+    createTime: '2026-07-20 14:10:00',
+    updateTime: '2026-08-01 17:00:00',
+    operationLogs: [
+      { id: 'ol7', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-07-20 14:10:00' },
+      { id: 'ol8', operator: '管理员', action: 'process', summary: '填写办理意见，标记诉转案', time: '2026-07-25 10:00:00' },
+      { id: 'ol9', operator: '管理员', action: 'review', summary: '负责人审核通过', time: '2026-07-26 15:00:00' },
+      { id: 'ol10', operator: '管理员', action: 'reply', summary: '回复投诉人', time: '2026-08-01 17:00:00' },
+    ],
+  },
+  {
+    id: 'TS-20260810-0004',
+    title: '酒店卫生条件差要求退款',
+    province: '贵州省',
+    city: '贵阳市',
+    district: '观山湖区',
+    complaintMethod: 'phone',
+    tourismCategory: 'accommodation',
+    complaintTime: '2026-08-10',
+    status: 'pending',
+    complainant: {
+      name: '赵六',
+      gender: 'male',
+      phone: '135****6666',
+    },
+    respondent: {
+      name: '贵阳XX大酒店',
+      address: '贵阳市观山湖区XX路88号',
+      phone: '0851-87999999',
+    },
+    content: '入住贵阳XX大酒店后发现房间床单有污渍、卫生间有异味，要求更换房间被前台拒绝，要求退款被拒。',
+    requests: '要求酒店退还房费并道歉',
+    replyStatus: 'none',
+    attachments: [],
+    createdBy: '管理员',
+    createTime: '2026-08-10 11:00:00',
+    updateTime: '2026-08-10 11:00:00',
+    operationLogs: [
+      { id: 'ol11', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-10 11:00:00' },
+    ],
+  },
+  {
+    id: 'TS-20260615-0005',
+    title: '在线旅游平台虚假宣传',
+    province: '贵州省',
+    city: '遵义市',
+    district: '红花岗区',
+    complaintMethod: 'online_platform',
+    tourismCategory: 'online_travel',
+    complaintTime: '2026-06-15',
+    status: 'closed',
+    complainant: {
+      name: '孙七',
+      gender: 'female',
+      phone: '133****2222',
+      email: 'sunqi@example.com',
+      contractDate: '2026-06-10',
+    },
+    respondent: {
+      name: 'XX在线旅游平台',
+      address: '上海市浦东新区XX大厦',
+    },
+    content: '在XX在线旅游平台预订遵义红色旅游线路，页面宣传包含"全程五星酒店"，实际入住为三星级酒店，涉嫌虚假宣传。',
+    requests: '要求平台退还差价并更正宣传信息',
+    handlerOpinion: '已联系平台核实，平台承认页面信息有误，同意退还差价并更正宣传内容。',
+    reviewerOpinion: '同意处理意见。',
+    replyStatus: 'closed',
+    replyTime: '2026-06-25',
+    replyContent: '平台已退还差价800元，并更正了相关页面宣传信息。',
+    attachments: [
+      { uid: 'c6', name: '平台宣传截图.png', size: 307200, type: 'image/png', uploadTime: '2026-06-15 16:00:00', title: '宣传截图' },
+    ],
+    createdBy: '管理员',
+    createTime: '2026-06-15 16:10:00',
+    updateTime: '2026-06-25 14:00:00',
+    operationLogs: [
+      { id: 'ol12', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-06-15 16:10:00' },
+      { id: 'ol13', operator: '管理员', action: 'close', summary: '办结归档', time: '2026-06-25 14:00:00' },
+    ],
+  },
+  {
+    id: 'TS-20260728-0006',
+    title: '旅游大巴超载行驶',
+    province: '贵州省',
+    city: '铜仁市',
+    district: '江口县',
+    complaintMethod: 'online_platform',
+    tourismCategory: 'transportation',
+    complaintTime: '2026-07-28',
+    status: 'transferred',
+    complainant: {
+      name: '周八',
+      gender: 'male',
+      phone: '138****9999',
+      address: '广东省广州市天河区XX路5号',
+    },
+    respondent: {
+      name: '铜仁XX旅游客运公司',
+      address: '铜仁市碧江区XX路',
+      phone: '0856-5212345',
+    },
+    content: '乘坐梵净山旅游专线大巴时，发现车辆核载35人实际乘坐42人，存在严重安全隐患。',
+    requests: '要求查处超载行为',
+    handlerOpinion: '涉嫌违反道路交通安全法规，已转交交通运输执法部门处理。',
+    reviewerOpinion: '同意转办。',
+    isTransferredToCase: true,
+    suspectedIssue: '客车超载，违反《道路交通安全法》',
+    replyStatus: 'none',
+    attachments: [
+      { uid: 'c7', name: '车内现场照片.jpg', size: 153600, type: 'image/jpeg', uploadTime: '2026-07-28 09:00:00', title: '现场照片' },
+    ],
+    remark: '来信投诉，已转交通运输部门',
+    createdBy: '管理员',
+    createTime: '2026-07-28 09:30:00',
+    updateTime: '2026-08-02 10:00:00',
+    operationLogs: [
+      { id: 'ol14', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-07-28 09:30:00' },
+      { id: 'ol15', operator: '管理员', action: 'process', summary: '填写办理意见，标记诉转案', time: '2026-08-01 14:00:00' },
+    ],
+  },
+];
+
+// ========== 团信息预设数据（模拟用户提前填报的团信息） ==========
+export interface TeamPreset {
+  teamName: string;
+  teamSize: number;
+  inboundTourists: number;
+  stayDays: number;
+  travelStart: string;
+  travelEnd: string;
+  travelDesc: string;
+  dispatchNo: string;
+  targetAgreementNo: string;
+  flightNo?: string;
+  trainNo?: string;
+  tourists: TouristItem[];
+  scenics: ScenicInfo[];
+  accommodations: AccommodationInfo[];
+  guideDrivers: GuideDriverInfo[];
+}
+
+export const MockTeamPresets: TeamPreset[] = [
+  {
+    teamName: '韩国首尔-贵州5日游',
+    teamSize: 15,
+    inboundTourists: 12,
+    stayDays: 5,
+    travelStart: '2026-09-01',
+    travelEnd: '2026-09-05',
+    travelDesc: '贵阳入境→黄果树瀑布→荔波小七孔→西江千户苗寨→贵阳出境',
+    dispatchNo: 'GZ-2026-0901-001',
+    targetAgreementNo: 'TA-2026-001',
+    flightNo: 'CA8234',
+    tourists: [
+      { key: 't1', name: 'Kim Min-su', idType: 'passport', idNumber: 'KR1234567', nationality: '韩国', sourcePlace: '首尔', age: 35, gender: 'male' },
+      { key: 't2', name: 'Lee Ji-eun', idType: 'passport', idNumber: 'KR2345678', nationality: '韩国', sourcePlace: '首尔', age: 28, gender: 'female' },
+      { key: 't3', name: 'Park Chan-wook', idType: 'passport', idNumber: 'KR3456789', nationality: '韩国', sourcePlace: '釜山', age: 42, gender: 'male' },
+      { key: 't4', name: 'Choi Seung-hyun', idType: 'passport', idNumber: 'KR4567890', nationality: '韩国', sourcePlace: '首尔', age: 31, gender: 'male' },
+    ],
+    scenics: [
+      { key: 's1', name: '黄果树瀑布景区', level: '5A', enterTime: '2026-09-02 09:00' },
+      { key: 's2', name: '荔波小七孔景区', level: '5A', enterTime: '2026-09-03 08:30' },
+    ],
+    accommodations: [
+      { key: 'a1', hotelName: '贵阳凯宾斯基酒店', checkInDate: '2026-09-01', checkOutDate: '2026-09-02' },
+      { key: 'a2', hotelName: '安顺百灵希尔顿逸林酒店', checkInDate: '2026-09-02', checkOutDate: '2026-09-03' },
+      { key: 'a3', hotelName: '贵阳凯宾斯基酒店', checkInDate: '2026-09-04', checkOutDate: '2026-09-05' },
+    ],
+    guideDrivers: [
+      { key: 'g1', type: 'guide', name: '张小明', licenseNo: 'GZ-2021-0568' },
+      { key: 'g2', type: 'driver', name: '王师傅', licenseNo: 'GZ-A-2021-0568' },
+    ],
+  },
+  {
+    teamName: '日本东京-贵州4日游',
+    teamSize: 20,
+    inboundTourists: 18,
+    stayDays: 4,
+    travelStart: '2026-09-10',
+    travelEnd: '2026-09-13',
+    travelDesc: '贵阳入境→梵净山→镇远古城→贵阳出境',
+    dispatchNo: 'GZ-2026-0910-002',
+    targetAgreementNo: 'TA-2026-002',
+    flightNo: 'MU729',
+    tourists: [
+      { key: 't1', name: 'Tanaka Hiroshi', idType: 'passport', idNumber: 'JP1234567', nationality: '日本', sourcePlace: '东京', age: 45, gender: 'male' },
+      { key: 't2', name: 'Suzuki Yuki', idType: 'passport', idNumber: 'JP2345678', nationality: '日本', sourcePlace: '大阪', age: 33, gender: 'female' },
+      { key: 't3', name: 'Yamamoto Aoi', idType: 'passport', idNumber: 'JP3456789', nationality: '日本', sourcePlace: '东京', age: 27, gender: 'female' },
+    ],
+    scenics: [
+      { key: 's1', name: '梵净山景区', level: '5A', enterTime: '2026-09-11 07:00' },
+      { key: 's2', name: '镇远古城景区', level: '4A', enterTime: '2026-09-12 10:00' },
+    ],
+    accommodations: [
+      { key: 'a1', hotelName: '铜仁江华国际酒店', checkInDate: '2026-09-10', checkOutDate: '2026-09-11' },
+      { key: 'a2', hotelName: '镇远府城宾馆', checkInDate: '2026-09-11', checkOutDate: '2026-09-12' },
+      { key: 'a3', hotelName: '贵阳铂尔曼大酒店', checkInDate: '2026-09-12', checkOutDate: '2026-09-13' },
+    ],
+    guideDrivers: [
+      { key: 'g1', type: 'guide', name: '李芳', licenseNo: 'GZ-2020-0321' },
+      { key: 'g2', type: 'driver', name: '刘师傅', licenseNo: 'GZ-B-2020-0321' },
+    ],
+  },
+  {
+    teamName: '香港直飞-贵州3日游',
+    teamSize: 12,
+    inboundTourists: 10,
+    stayDays: 3,
+    travelStart: '2026-09-15',
+    travelEnd: '2026-09-17',
+    travelDesc: '贵阳入境→西江千户苗寨→青岩古镇→贵阳出境',
+    dispatchNo: 'GZ-2026-0915-003',
+    targetAgreementNo: 'TA-2026-003',
+    flightNo: 'CZ3092',
+    tourists: [
+      { key: 't1', name: 'Chan Tai Man', idType: 'hk_macao_pass', idNumber: 'HK9876543', nationality: '中国香港', sourcePlace: '香港', age: 50, gender: 'male' },
+      { key: 't2', name: 'Wong Siu Ming', idType: 'hk_macao_pass', idNumber: 'HK8765432', nationality: '中国香港', sourcePlace: '香港', age: 38, gender: 'female' },
+    ],
+    scenics: [
+      { key: 's1', name: '西江千户苗寨', level: '4A', enterTime: '2026-09-16 09:00' },
+      { key: 's2', name: '青岩古镇', level: '4A', enterTime: '2026-09-16 14:00' },
+    ],
+    accommodations: [
+      { key: 'a1', hotelName: '贵阳喜来登贵航酒店', checkInDate: '2026-09-15', checkOutDate: '2026-09-16' },
+      { key: 'a2', hotelName: '雷山西江大酒店', checkInDate: '2026-09-16', checkOutDate: '2026-09-17' },
+    ],
+    guideDrivers: [
+      { key: 'g1', type: 'guide', name: '杨小红', licenseNo: 'GZ-2022-0789' },
+      { key: 'g2', type: 'driver', name: '陈师傅', licenseNo: 'GZ-C-2022-0789' },
+    ],
+  },
+];
+
+// ========== 企业资质档案模拟证照数据 ==========
+export const MockEnterpriseCertificates: {
+  businessLicense?: Attachment;
+  travelLicense?: Attachment;
+  legalRepId?: Attachment;
+} = {
+  businessLicense: {
+    uid: 'ent-bl-001',
+    name: '贵州阳光国际旅行社_营业执照.pdf',
+    size: 512000,
+    type: 'application/pdf',
+    uploadTime: '2025-03-15 10:00:00',
+    group: 'base',
+    title: '企业营业执照',
+  },
+  travelLicense: {
+    uid: 'ent-tl-001',
+    name: '贵州阳光国际旅行社_业务经营许可证.pdf',
+    size: 384000,
+    type: 'application/pdf',
+    uploadTime: '2025-03-15 10:05:00',
+    group: 'base',
+    title: '旅行社业务经营许可证',
+  },
+  legalRepId: {
+    uid: 'ent-lr-001',
+    name: '法定代表人身份证_李明.pdf',
+    size: 256000,
+    type: 'application/pdf',
+    uploadTime: '2025-03-15 10:10:00',
+    group: 'base',
+    title: '法定代表人身份证',
+  },
+};
+
+// ========== 舆情管理分析 mock 数据 ==========
+// 辅助：生成近 N 天的 ISO 时间字符串
+function opinionTime(daysAgo: number, h = 10, m = 0): string {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  d.setHours(h, m, 0, 0)
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:00`
+}
+
+// 处置日志生成器
+function makeLog(operator: string, action: OpinionHandleLog['action'], opinion: string, daysAgo: number, fromStatus?: any, toStatus?: any): OpinionHandleLog {
+  return {
+    id: `LOG-${Math.random().toString(36).slice(2, 8)}`,
+    operator,
+    action,
+    fromStatus,
+    toStatus,
+    opinion,
+    time: opinionTime(daysAgo, 9, 30),
+  }
+}
+
+export const MockPublicOpinions: PublicOpinion[] = [
+  {
+    id: 'PO-20260801-0001',
+    title: '贵阳某酒店强制消费被游客投诉',
+    author: '小红书用户 贵州小芳',
+    authorLocation: '贵阳市',
+    keywords: ['强制消费', '酒店', '贵阳', '宰客'],
+    sourceWebsite: '小红书',
+    sourceUrl: 'https://www.xiaohongshu.com/explore/example1',
+    content: '贵州贵阳某四星级酒店前台强制推销"贵州特产礼包"价格880元，不购买则拒绝办理入住。导游全程冷眼旁观，态度恶劣。同行团员集体抗议才得以退回。强烈建议市场监管部门查处！',
+    publishTime: opinionTime(3, 14, 25),
+    dataSource: 'opinion_system',
+    tourismCategory: 'accommodation',
+    sentiment: 'negative',
+    riskLevel: 'high',
+    riskScore: 78,
+    handleStatus: 'processing',
+    involvedSubjects: ['贵阳某四星级酒店', '某地接导游'],
+    attachments: [],
+    remark: '已转市监局',
+    createdBy: '舆情系统',
+    createTime: opinionTime(3, 14, 30),
+    updateTime: opinionTime(1, 10, 0),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '自动从舆情系统抓取入库', 3),
+      makeLog('陈厅长', 'process', '转贵阳市文旅局核实处理', 1, 'pending', 'processing'),
+    ],
+  },
+  {
+    id: 'PO-20260802-0002',
+    title: '黄果树瀑布景区排队3小时游客怒发抖音',
+    author: '抖音用户 旅行达人阿杰',
+    authorLocation: '安顺市',
+    keywords: ['景区', '排队', '黄果树', '拥堵'],
+    sourceWebsite: '抖音',
+    sourceUrl: 'https://www.douyin.com/video/example2',
+    content: '黄金周第一天去黄果树，结果大瀑布入口排队3小时只能进入观景台15分钟。景区限流措施完全失效，工作人员指引不清晰。带老人小孩的特别崩溃。贵州旅游体验极差！',
+    publishTime: opinionTime(5, 11, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'scenic_area',
+    sentiment: 'negative',
+    riskLevel: 'critical',
+    riskScore: 85,
+    handleStatus: 'pending',
+    involvedSubjects: ['黄果树瀑布景区'],
+    attachments: [],
+    remark: '黄金周高发，需重点关注',
+    createdBy: '舆情系统',
+    createTime: opinionTime(5, 11, 5),
+    updateTime: opinionTime(5, 11, 5),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '自动抓取入库，风险指数 85', 5),
+    ],
+  },
+  {
+    id: 'PO-20260803-0003',
+    title: '黔东南民宿卫生问题被多名游客曝光',
+    author: '微博用户 苗寨住宿体验官',
+    authorLocation: '黔东南苗族侗族自治州',
+    keywords: ['民宿', '卫生', '黔东南', '西江千户苗寨'],
+    sourceWebsite: '微博',
+    sourceUrl: 'https://weibo.com/example3',
+    content: '西江千户苗寨某网红民宿床品有污渍、浴室发霉、早餐变质。老板态度敷衍，退还部分房款了事。同行5位朋友都发帖曝光了，希望监管部门介入。',
+    publishTime: opinionTime(7, 20, 30),
+    dataSource: 'cyberspace_admin',
+    tourismCategory: 'accommodation',
+    sentiment: 'negative',
+    riskLevel: 'high',
+    riskScore: 72,
+    handleStatus: 'handled',
+    involvedSubjects: ['西江千户苗寨某民宿'],
+    attachments: [],
+    remark: '已转黔东南文旅局处理，民宿被责令停业整改',
+    createdBy: '网信办',
+    createTime: opinionTime(7, 20, 35),
+    updateTime: opinionTime(2, 16, 0),
+    handleLogs: [
+      makeLog('网信办', 'create', '网信办推送', 7),
+      makeLog('陈厅长', 'process', '转黔东南州文旅局核实', 5, 'pending', 'processing'),
+      makeLog('陈厅长', 'handle', '民宿被责令停业整改，已回复原作者', 2, 'processing', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260804-0004',
+    title: '贵州导游专业热情获游客点赞',
+    author: '马蜂窝用户 走遍中国',
+    authorLocation: '遵义市',
+    keywords: ['导游', '服务', '遵义', '好评'],
+    sourceWebsite: '马蜂窝',
+    sourceUrl: 'https://www.mafengwo.cn/example4',
+    content: '遵义会议会址导游小杨讲解生动专业，全程陪同3小时无怨言，老一辈游客特别感动。强烈推荐贵州红色旅游，导游服务行业应该推广这样的标杆。',
+    publishTime: opinionTime(8, 15, 0),
+    dataSource: 'manual_entry',
+    tourismCategory: 'tour_guide',
+    sentiment: 'positive',
+    riskLevel: 'low',
+    riskScore: 15,
+    handleStatus: 'handled',
+    involvedSubjects: ['遵义会议会址导游小杨'],
+    attachments: [],
+    remark: '',
+    createdBy: '管理员',
+    createTime: opinionTime(8, 15, 10),
+    updateTime: opinionTime(6, 9, 0),
+    handleLogs: [
+      makeLog('管理员', 'create', '手动录入正面舆情', 8),
+      makeLog('陈厅长', 'handle', '作为正面案例归档，可用于行业标杆宣传', 6, 'pending', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260805-0005',
+    title: '铜仁梵净山门票价格调整引发讨论',
+    author: '知乎用户 文旅观察者',
+    authorLocation: '铜仁市',
+    keywords: ['门票', '价格', '梵净山', '铜仁'],
+    sourceWebsite: '知乎',
+    sourceUrl: 'https://www.zhihu.com/question/example5',
+    content: '梵净山门票价格从100元调整至120元，是否合理？部分游客认为旺季涨价可以理解，部分认为价格虚高且未体现服务提升。建议景区公示涨价依据并优化动线。',
+    publishTime: opinionTime(10, 9, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'scenic_area',
+    sentiment: 'neutral',
+    riskLevel: 'medium',
+    riskScore: 42,
+    handleStatus: 'pending',
+    involvedSubjects: ['梵净山景区'],
+    attachments: [],
+    createdBy: '舆情系统',
+    createTime: opinionTime(10, 9, 5),
+    updateTime: opinionTime(10, 9, 5),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '自动抓取入库，中性讨论', 10),
+    ],
+  },
+  {
+    id: 'PO-20260806-0006',
+    title: '毕节百里杜鹃景区交通接驳混乱',
+    author: '百度贴吧用户 摄影老李',
+    authorLocation: '毕节市',
+    keywords: ['交通', '接驳', '百里杜鹃', '景区'],
+    sourceWebsite: '百度贴吧',
+    sourceUrl: 'https://tieba.baidu.com/example6',
+    content: '毕节百里杜鹃景区停车场饱和后无引导，自驾游客堵在路上2小时。景区摆渡车排队超1小时，标识不清。建议增设临时停车场和电子导引牌。',
+    publishTime: opinionTime(12, 16, 30),
+    dataSource: 'provincial_police',
+    tourismCategory: 'transportation',
+    sentiment: 'negative',
+    riskLevel: 'medium',
+    riskScore: 48,
+    handleStatus: 'processing',
+    involvedSubjects: ['百里杜鹃景区'],
+    attachments: [],
+    remark: '省公安厅推送，涉交通秩序',
+    createdBy: '省公安厅',
+    createTime: opinionTime(12, 16, 35),
+    updateTime: opinionTime(4, 10, 0),
+    handleLogs: [
+      makeLog('省公安厅', 'create', '省公安厅推送，涉交通秩序', 12),
+      makeLog('陈厅长', 'process', '转毕节市交警与文旅局联合处置', 4, 'pending', 'processing'),
+    ],
+  },
+  {
+    id: 'PO-20260807-0007',
+    title: '贵州美食获美食博主集体推荐',
+    author: 'B站用户 美食侦探',
+    authorLocation: '贵阳市',
+    keywords: ['美食', '丝娃娃', '酸汤鱼', '好评'],
+    sourceWebsite: '哔哩哔哩',
+    sourceUrl: 'https://www.bilibili.com/video/example7',
+    content: '贵州美食地图：丝娃娃、酸汤鱼、肠旺面、恋爱豆腐果……贵州旅游的隐藏彩蛋就是美食！强烈推荐自由行游客深度体验贵阳青云路夜市。',
+    publishTime: opinionTime(15, 19, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'other',
+    sentiment: 'positive',
+    riskLevel: 'low',
+    riskScore: 10,
+    handleStatus: 'handled',
+    involvedSubjects: ['贵阳青云路夜市'],
+    attachments: [],
+    createdBy: '舆情系统',
+    createTime: opinionTime(15, 19, 5),
+    updateTime: opinionTime(13, 10, 0),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '正面宣传内容，可放大营销', 15),
+      makeLog('陈厅长', 'handle', '转营销处用于宣传素材', 13, 'pending', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260808-0008',
+    title: '六盘水滑雪场安全事故引发关注',
+    author: '抖音用户 极限运动咖',
+    authorLocation: '六盘水市',
+    keywords: ['安全', '事故', '滑雪', '六盘水'],
+    sourceWebsite: '抖音',
+    sourceUrl: 'https://www.douyin.com/video/example8',
+    content: '六盘水某滑雪场游客碰撞事故，雪道安全员响应慢，救护车1小时才到。建议景区增配安全员和医疗点，公示紧急处置流程。',
+    publishTime: opinionTime(18, 11, 30),
+    dataSource: 'cyberspace_admin',
+    tourismCategory: 'entertainment',
+    sentiment: 'negative',
+    riskLevel: 'critical',
+    riskScore: 88,
+    handleStatus: 'handled',
+    involvedSubjects: ['六盘水某滑雪场'],
+    attachments: [],
+    remark: '涉安全事故，已启动应急预案',
+    createdBy: '网信办',
+    createTime: opinionTime(18, 11, 35),
+    updateTime: opinionTime(14, 17, 0),
+    handleLogs: [
+      makeLog('网信办', 'create', '涉安全事故，红色预警', 18),
+      makeLog('陈厅长', 'process', '启动应急预案，转六盘水市文旅局+市监局', 17, 'pending', 'processing'),
+      makeLog('陈厅长', 'handle', '景区增配安全员和医疗点，已处理完毕', 14, 'processing', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260809-0009',
+    title: '黔南荔波小七孔景区游客承载量预警',
+    author: '携程用户 亲子游妈妈',
+    authorLocation: '黔南布依族苗族自治州',
+    keywords: ['承载量', '限流', '荔波', '小七孔'],
+    sourceWebsite: '携程',
+    sourceUrl: 'https://www.ctrip.com/example9',
+    content: '荔波小七孔景区承载量已达上限但未及时限流，导致游客长时间滞留。建议景区动态公布实时客流并提前预约制限流。',
+    publishTime: opinionTime(20, 13, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'scenic_area',
+    sentiment: 'negative',
+    riskLevel: 'medium',
+    riskScore: 55,
+    handleStatus: 'pending',
+    involvedSubjects: ['荔波小七孔景区'],
+    attachments: [],
+    createdBy: '舆情系统',
+    createTime: opinionTime(20, 13, 5),
+    updateTime: opinionTime(20, 13, 5),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '自动抓取入库', 20),
+    ],
+  },
+  {
+    id: 'PO-20260810-0010',
+    title: '贵州旅行社组团强迫购物被曝光',
+    author: '黑猫投诉用户 维权者小张',
+    authorLocation: '遵义市',
+    keywords: ['强制购物', '旅行社', '遵义', '维权'],
+    sourceWebsite: '黑猫投诉',
+    sourceUrl: 'https://tousu.sina.com/example10',
+    content: '遵义某旅行社组织黔北旅游，全程强制进3家购物店，导游言语威胁不购物不让上车。已向12345和黑猫投诉，要求退还团费并处罚旅行社。',
+    publishTime: opinionTime(25, 21, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'travel_agency',
+    sentiment: 'negative',
+    riskLevel: 'high',
+    riskScore: 75,
+    handleStatus: 'handled',
+    involvedSubjects: ['遵义某旅行社', '某导游'],
+    attachments: [],
+    remark: '旅行社被立案调查',
+    createdBy: '舆情系统',
+    createTime: opinionTime(25, 21, 5),
+    updateTime: opinionTime(15, 11, 0),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '负面高敏感舆情，自动触发橙色预警', 25),
+      makeLog('陈厅长', 'process', '转市监局+文旅执法大队', 22, 'pending', 'processing'),
+      makeLog('陈厅长', 'handle', '旅行社停业整顿并处罚款，已回复投诉人', 15, 'processing', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260811-0011',
+    title: '贵阳地铁直达景区交通便捷获好评',
+    author: '小红书用户 城市观察家',
+    authorLocation: '贵阳市',
+    keywords: ['交通', '地铁', '贵阳', '好评'],
+    sourceWebsite: '小红书',
+    sourceUrl: 'https://www.xiaohongshu.com/explore/example11',
+    content: '贵阳地铁直达黔灵山公园，交通极其便利。城市公共服务配套完善，外地游客自由行体验很好。贵州文旅基础设施提升明显。',
+    publishTime: opinionTime(28, 8, 0),
+    dataSource: 'manual_entry',
+    tourismCategory: 'transportation',
+    sentiment: 'positive',
+    riskLevel: 'low',
+    riskScore: 12,
+    handleStatus: 'handled',
+    attachments: [],
+    createdBy: '管理员',
+    createTime: opinionTime(28, 8, 5),
+    updateTime: opinionTime(26, 9, 0),
+    handleLogs: [
+      makeLog('管理员', 'create', '手动录入正面舆情', 28),
+      makeLog('陈厅长', 'handle', '归档为正面案例', 26, 'pending', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260812-0012',
+    title: '安顺黄蜡石景区购物店价格虚高',
+    author: '大众点评用户 老饕食客',
+    authorLocation: '安顺市',
+    keywords: ['购物', '价格', '安顺', '虚高'],
+    sourceWebsite: '大众点评',
+    sourceUrl: 'https://www.dianping.com/example12',
+    content: '安顺某景区出口购物店黄蜡石摆件标价6800元，实际成本几百元。店员强制推销，纠缠游客10分钟才放行。强烈要求市场监管部门查处价格欺诈。',
+    publishTime: opinionTime(32, 14, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'shopping',
+    sentiment: 'negative',
+    riskLevel: 'medium',
+    riskScore: 50,
+    handleStatus: 'processing',
+    involvedSubjects: ['安顺某景区购物店'],
+    attachments: [],
+    createdBy: '舆情系统',
+    createTime: opinionTime(32, 14, 5),
+    updateTime: opinionTime(20, 10, 0),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '自动抓取入库', 32),
+      makeLog('陈厅长', 'process', '转安顺市监局核实价格', 20, 'pending', 'processing'),
+    ],
+  },
+  {
+    id: 'PO-20260813-0013',
+    title: '贵州红色旅游获中央媒体专题报道',
+    author: '央视新闻',
+    authorLocation: '遵义市',
+    keywords: ['红色旅游', '央视', '遵义', '正面'],
+    sourceWebsite: '央视新闻',
+    sourceUrl: 'https://news.cctv.com/example13',
+    content: '央视新闻专题报道贵州红色旅游资源整合成效：遵义会议会址、娄山关、四渡赤水等景点联动发展，年接待游客超千万，红色文化传承与旅游经济双丰收。',
+    publishTime: opinionTime(40, 19, 0),
+    dataSource: 'cyberspace_admin',
+    tourismCategory: 'cultural_market',
+    sentiment: 'positive',
+    riskLevel: 'low',
+    riskScore: 8,
+    handleStatus: 'handled',
+    involvedSubjects: ['遵义会议会址', '娄山关', '四渡赤水'],
+    attachments: [],
+    remark: '央媒正面报道，可作为典型宣传素材',
+    createdBy: '网信办',
+    createTime: opinionTime(40, 19, 5),
+    updateTime: opinionTime(38, 9, 0),
+    handleLogs: [
+      makeLog('网信办', 'create', '央媒推送', 40),
+      makeLog('陈厅长', 'handle', '转宣传处用于对外推介', 38, 'pending', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260814-0014',
+    title: '贵州在线旅游平台退款纠纷频发',
+    author: '黑猫投诉用户 集体维权',
+    authorLocation: '贵阳市',
+    keywords: ['在线旅游', '退款', '纠纷', '平台'],
+    sourceWebsite: '黑猫投诉',
+    sourceUrl: 'https://tousu.sina.com/example14',
+    content: '贵州某在线旅游平台近1个月退款纠纷超50起，涉及门票、酒店、跟团游等多品类。平台以"系统升级"为由拖延退款，涉嫌违规占用消费者资金。',
+    publishTime: opinionTime(45, 10, 30),
+    dataSource: 'opinion_system',
+    tourismCategory: 'online_travel',
+    sentiment: 'negative',
+    riskLevel: 'high',
+    riskScore: 70,
+    handleStatus: 'pending',
+    involvedSubjects: ['某在线旅游平台'],
+    attachments: [],
+    remark: '集体维权舆情，需重点关注',
+    createdBy: '舆情系统',
+    createTime: opinionTime(45, 10, 35),
+    updateTime: opinionTime(45, 10, 35),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '集体维权，触发橙色预警', 45),
+    ],
+  },
+  {
+    id: 'PO-20260815-0015',
+    title: '黔西南马岭河峡谷漂流安全装备问题',
+    author: '微博用户 户外探险家',
+    authorLocation: '黔西南布依族苗族自治州',
+    keywords: ['漂流', '安全', '马岭河', '装备'],
+    sourceWebsite: '微博',
+    sourceUrl: 'https://weibo.com/example15',
+    content: '马岭河峡谷漂流救生衣老化破损、头盔缺失。安全员配比不足。多名游客反映类似问题，建议景区立即停业整改并通报全市漂流类景区排查。',
+    publishTime: opinionTime(50, 15, 0),
+    dataSource: 'provincial_police',
+    tourismCategory: 'entertainment',
+    sentiment: 'negative',
+    riskLevel: 'critical',
+    riskScore: 82,
+    handleStatus: 'handled',
+    involvedSubjects: ['马岭河峡谷漂流景区'],
+    attachments: [],
+    remark: '涉人身安全，红色预警',
+    createdBy: '省公安厅',
+    createTime: opinionTime(50, 15, 5),
+    updateTime: opinionTime(42, 16, 0),
+    handleLogs: [
+      makeLog('省公安厅', 'create', '涉安全装备，红色预警', 50),
+      makeLog('陈厅长', 'process', '启动应急预案，景区停业整改', 48, 'pending', 'processing'),
+      makeLog('陈厅长', 'handle', '景区完成整改复检通过，恢复营业', 42, 'processing', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260816-0016',
+    title: '贵州民族风情获境外游客点赞',
+    author: 'TripAdvisor 用户 GlobalTraveler',
+    authorLocation: '贵阳市',
+    keywords: ['入境游', '民族风情', '正面', '境外'],
+    sourceWebsite: 'TripAdvisor',
+    sourceUrl: 'https://www.tripadvisor.com/example16',
+    content: 'Guizhou ethnic culture tour was amazing! Miao and Dong villages preserved authentic traditions. Local guides English-fluent. Highly recommend for international travelers seeking authentic China experience.',
+    publishTime: opinionTime(55, 8, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'other',
+    sentiment: 'positive',
+    riskLevel: 'low',
+    riskScore: 5,
+    handleStatus: 'handled',
+    involvedSubjects: ['苗寨', '侗寨'],
+    attachments: [],
+    remark: '境外正面评价，可放大入境游宣传',
+    createdBy: '舆情系统',
+    createTime: opinionTime(55, 8, 5),
+    updateTime: opinionTime(52, 9, 0),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '境外平台正面评价', 55),
+      makeLog('陈厅长', 'handle', '转入境游营销用于宣传', 52, 'pending', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260817-0017',
+    title: '贵阳出租车司机拒载游客被举报',
+    author: '12345热线用户 张先生',
+    authorLocation: '贵阳市',
+    keywords: ['出租车', '拒载', '贵阳', '交通'],
+    sourceWebsite: '12345热线',
+    sourceUrl: 'https://12345.guizhou.gov.cn/example17',
+    content: '贵阳北站出租车等候区，多名司机以"不顺路"为由拒载短途游客，强制拼车。强烈建议交通部门加大查处力度，规范营运秩序。',
+    publishTime: opinionTime(60, 17, 0),
+    dataSource: 'provincial_police',
+    tourismCategory: 'transportation',
+    sentiment: 'negative',
+    riskLevel: 'medium',
+    riskScore: 45,
+    handleStatus: 'pending',
+    involvedSubjects: ['贵阳北站出租车'],
+    attachments: [],
+    createdBy: '省公安厅',
+    createTime: opinionTime(60, 17, 5),
+    updateTime: opinionTime(60, 17, 5),
+    handleLogs: [
+      makeLog('省公安厅', 'create', '12345转办，涉交通秩序', 60),
+    ],
+  },
+  {
+    id: 'PO-20260818-0018',
+    title: '贵州非物质文化遗产体验获好评',
+    author: '小红书用户 手工达人',
+    authorLocation: '黔东南苗族侗族自治州',
+    keywords: ['非遗', '蜡染', '银饰', '好评'],
+    sourceWebsite: '小红书',
+    sourceUrl: 'https://www.xiaohongshu.com/explore/example18',
+    content: '黔东南苗族侗寨非遗体验项目超棒！蜡染、银饰、芦笙制作都可亲手体验，老师傅手把手教学，作品可带走。强烈推荐深度文化游。',
+    publishTime: opinionTime(65, 11, 0),
+    dataSource: 'manual_entry',
+    tourismCategory: 'cultural_market',
+    sentiment: 'positive',
+    riskLevel: 'low',
+    riskScore: 10,
+    handleStatus: 'handled',
+    attachments: [],
+    createdBy: '管理员',
+    createTime: opinionTime(65, 11, 5),
+    updateTime: opinionTime(62, 9, 0),
+    handleLogs: [
+      makeLog('管理员', 'create', '手动录入正面案例', 65),
+      makeLog('陈厅长', 'handle', '作为非遗旅游推广素材', 62, 'pending', 'handled'),
+    ],
+  },
+  {
+    id: 'PO-20260819-0019',
+    title: '贵州某5A景区厕所卫生问题被曝光',
+    author: '抖音用户 卫生监督员',
+    authorLocation: '安顺市',
+    keywords: ['厕所', '卫生', '5A景区', '安顺'],
+    sourceWebsite: '抖音',
+    sourceUrl: 'https://www.douyin.com/video/example19',
+    content: '安顺某5A景区厕所数量不足、卫生极差、异味严重。游客排队如厕超20分钟。强烈建议景区增设第三卫生间和母婴室，提升基础服务。',
+    publishTime: opinionTime(70, 12, 0),
+    dataSource: 'opinion_system',
+    tourismCategory: 'scenic_area',
+    sentiment: 'negative',
+    riskLevel: 'medium',
+    riskScore: 47,
+    handleStatus: 'processing',
+    involvedSubjects: ['安顺某5A景区'],
+    attachments: [],
+    createdBy: '舆情系统',
+    createTime: opinionTime(70, 12, 5),
+    updateTime: opinionTime(50, 10, 0),
+    handleLogs: [
+      makeLog('舆情系统', 'create', '自动抓取入库', 70),
+      makeLog('陈厅长', 'process', '转安顺文旅局督促整改', 50, 'pending', 'processing'),
+    ],
+  },
+  {
+    id: 'PO-20260820-0020',
+    title: '贵州高速服务区旅游咨询服务获赞',
+    author: '马蜂窝用户 自驾老王',
+    authorLocation: '遵义市',
+    keywords: ['高速', '服务区', '咨询', '好评'],
+    sourceWebsite: '马蜂窝',
+    sourceUrl: 'https://www.mafengwo.cn/example20',
+    content: '贵州高速服务区设旅游咨询点，工作人员热情专业，免费提供路线规划、景点推荐和应急物资。强烈点赞贵州文旅公共服务。',
+    publishTime: opinionTime(75, 14, 0),
+    dataSource: 'manual_entry',
+    tourismCategory: 'other',
+    sentiment: 'positive',
+    riskLevel: 'low',
+    riskScore: 8,
+    handleStatus: 'handled',
+    attachments: [],
+    createdBy: '管理员',
+    createTime: opinionTime(75, 14, 5),
+    updateTime: opinionTime(72, 9, 0),
+    handleLogs: [
+      makeLog('管理员', 'create', '手动录入正面案例', 75),
+      makeLog('陈厅长', 'handle', '作为公共服务标杆案例', 72, 'pending', 'handled'),
+    ],
+  },
+];
+
+export const MockOpinionWarningRules: OpinionWarningRule[] = [
+  {
+    id: 'WR-001',
+    name: '负面高敏感词预警',
+    keywords: ['宰客', '强制消费', '安全事故', '食物中毒'],
+    sentiment: 'negative',
+    riskLevel: 'high',
+    threshold: 1,
+    windowMinutes: 60,
+    alertLevel: 'red',
+    enabled: true,
+    createdBy: '管理员',
+    createTime: opinionTime(30, 9, 0),
+  },
+  {
+    id: 'WR-002',
+    name: '负面舆情高频次预警',
+    sentiment: 'negative',
+    threshold: 5,
+    windowMinutes: 60,
+    alertLevel: 'orange',
+    enabled: true,
+    createdBy: '管理员',
+    createTime: opinionTime(30, 9, 5),
+  },
+  {
+    id: 'WR-003',
+    name: '高风险等级预警',
+    riskLevel: 'critical',
+    threshold: 1,
+    windowMinutes: 1440,
+    alertLevel: 'red',
+    enabled: true,
+    createdBy: '管理员',
+    createTime: opinionTime(30, 9, 10),
+  },
+  {
+    id: 'WR-004',
+    name: '住宿类负面舆情预警',
+    tourismCategory: 'accommodation',
+    sentiment: 'negative',
+    threshold: 3,
+    windowMinutes: 1440,
+    alertLevel: 'orange',
+    enabled: true,
+    createdBy: '管理员',
+    createTime: opinionTime(30, 9, 15),
+  },
+  {
+    id: 'WR-005',
+    name: '景区类负面舆情预警',
+    tourismCategory: 'scenic_area',
+    sentiment: 'negative',
+    threshold: 3,
+    windowMinutes: 1440,
+    alertLevel: 'yellow',
+    enabled: false,
+    createdBy: '管理员',
+    createTime: opinionTime(30, 9, 20),
+  },
+];
+
+export const MockOpinionWarnings: OpinionWarning[] = [
+  {
+    id: 'WARN-001',
+    ruleId: 'WR-001',
+    ruleName: '负面高敏感词预警',
+    alertLevel: 'red',
+    triggerTime: opinionTime(5, 11, 5),
+    relatedOpinionIds: ['PO-20260802-0002'],
+    relatedComplaintIds: [],
+    summary: '黄果树瀑布景区排队3小时游客怒发抖音 - 触发关键词"安全事故"附近词',
+    handled: true,
+    handleBy: '陈厅长',
+    handleTime: opinionTime(4, 10, 0),
+    handleOpinion: '转安顺市文旅局督促整改，已回复原作者',
+  },
+  {
+    id: 'WARN-002',
+    ruleId: 'WR-003',
+    ruleName: '高风险等级预警',
+    alertLevel: 'red',
+    triggerTime: opinionTime(50, 15, 5),
+    relatedOpinionIds: ['PO-20260815-0015'],
+    relatedComplaintIds: [],
+    summary: '马岭河峡谷漂流安全装备问题 - 风险等级=极高',
+    handled: true,
+    handleBy: '陈厅长',
+    handleTime: opinionTime(42, 16, 0),
+    handleOpinion: '启动应急预案，景区完成整改复检通过',
+  },
+  {
+    id: 'WARN-003',
+    ruleId: 'WR-002',
+    ruleName: '负面舆情高频次预警',
+    alertLevel: 'orange',
+    triggerTime: opinionTime(1, 9, 0),
+    relatedOpinionIds: ['PO-20260801-0001', 'PO-20260802-0002'],
+    relatedComplaintIds: [],
+    summary: '近1小时负面舆情达2条，超过阈值',
+    handled: false,
+  },
+  {
+    id: 'WARN-004',
+    ruleId: 'WR-004',
+    ruleName: '住宿类负面舆情预警',
+    alertLevel: 'orange',
+    triggerTime: opinionTime(7, 20, 35),
+    relatedOpinionIds: ['PO-20260803-0003'],
+    relatedComplaintIds: [],
+    summary: '黔东南民宿卫生问题 - 住宿类负面',
+    handled: true,
+    handleBy: '陈厅长',
+    handleTime: opinionTime(2, 16, 0),
+    handleOpinion: '民宿被责令停业整改',
+  },
+];
+
+export const MockOpinionReports: OpinionReport[] = [
+  {
+    id: 'RPT-202608-D-001',
+    type: 'daily',
+    title: '2026-08-16 舆情日报',
+    periodStart: '2026-08-16 00:00:00',
+    periodEnd: '2026-08-16 23:59:59',
+    generatedAt: opinionTime(1, 18, 0),
+    content: `【舆情概述】本日新增舆情3条，其中负面2条、中性1条、正面0条。负面舆情主要涉及景区排队、酒店强制消费。
+
+【负面清单】
+1. 黄果树瀑布景区排队3小时（风险指数85，红色预警）
+2. 贵阳某酒店强制消费（风险指数78，橙色预警）
+
+【TOP热点】排队、强制消费、贵阳、安顺
+
+【处置情况】新增待处置1条，处置中1条，已完成处置1条
+
+【风险提示】景区排队与酒店消费类负面舆情高发，需在节假日加强应急响应。`,
+    createdBy: '系统自动',
+  },
+  {
+    id: 'RPT-202608-W-001',
+    type: 'weekly',
+    title: '2026年第33周 舆情周报',
+    periodStart: '2026-08-10 00:00:00',
+    periodEnd: '2026-08-16 23:59:59',
+    generatedAt: opinionTime(1, 19, 0),
+    content: `【趋势分析】本周新增舆情8条，环比上周+15%。负面占比62.5%（5/8），市场情绪整体偏负。
+
+【情感分布】正面2条（25%），负面5条（62.5%），中性1条（12.5%）
+
+【地域分布】贵阳2条、安顺2条、黔东南1条、遵义1条、六盘水1条、毕节1条
+
+【TOP热点】排队、强制消费、卫生、安全、价格
+
+【改进建议】
+1. 景区排队与限流措施需在节假日提前部署
+2. 酒店强制消费问题应专项整治
+3. 民宿卫生问题应建立卫生可视化长效机制
+4. 安全装备类问题需启动应急预案排查`,
+    createdBy: '系统自动',
+  },
+  {
+    id: 'RPT-202607-M-001',
+    type: 'monthly',
+    title: '2026年7月 舆情月报',
+    periodStart: '2026-07-01 00:00:00',
+    periodEnd: '2026-07-31 23:59:59',
+    generatedAt: opinionTime(15, 20, 0),
+    content: `【全维度分析】7月共录入舆情12条，其中负面8条（66.7%），正面3条（25%），中性1条（8.3%）。负面占比高于年度平均。
+
+【环比分析】环比6月+33%，主要因暑期旺季游客量激增，服务承载力不足。
+
+【案例复盘】
+1. 黄果树景区排队事件：通过增派志愿者、增设限流提示牌，舆情在48小时内平息
+2. 黔东南民宿卫生：建立卫生可视化机制后，同类投诉减少60%
+
+【决策建议】
+1. 暑期旺季前30天启动应急监测机制
+2. 推行景区厕所革命和民宿卫生星级评定
+3. 建立"负面舆情—投诉数据—申报数据"联动分析模型`,
+    createdBy: '系统自动',
+  },
+];
+
+// ========== 引客入黔补贴管理 mock 数据 ==========
+import type { SubsidyApplication, SubsidyOperationLog } from '../types';
+
+// 补贴申报 - 默认空行模板生成器
+export function emptyTeamReceptionRows() {
+  return [
+    { key: 'tr1', project: '港澳台地区', amount: 0, teamSize: 0 },
+    { key: 'tr2', project: '东盟国家', amount: 0, teamSize: 0 },
+    { key: 'tr3', project: '东盟以外其他国家', amount: 0, teamSize: 0 },
+  ];
+}
+
+export function emptySpecialTourismRows() {
+  return [
+    { key: 'sp1', project: '港澳台直航', amount: 0, teamSize: 0 },
+    { key: 'sp2', project: '亚洲国家直航', amount: 0, teamSize: 0 },
+    { key: 'sp3', project: '一程多站联程旅游', amount: 0, teamSize: 0 },
+    { key: 'sp4', project: '240小时过境免签旅游', amount: 0, teamSize: 0 },
+    { key: 'sp5', project: '高铁旅游奖励', amount: 0, teamSize: 0 },
+    { key: 'sp6', project: '境外大型团队旅游', amount: 0, teamSize: 0 },
+  ];
+}
+
+export function emptyCulturePromotionRows() {
+  return [
+    { key: 'cp1', project: '参展推广奖励', amount: 0, activityName: '', location: '', participants: 0 },
+    { key: 'cp2', project: '请进来奖励', amount: 0, activityName: '', location: '', participants: 0 },
+    { key: 'cp3', project: '入境旅游宣传', amount: 0, activityName: '', location: '', participants: 0 },
+    { key: 'cp4', project: '交流合作奖励', amount: 0, activityName: '', location: '', participants: 0 },
+  ];
+}
+
+// 锁定截止时间计算：出团日期前一日 23:59:59
+export function calcLockDeadline(travelStart: string): string {
+  const d = new Date(travelStart);
+  d.setDate(d.getDate() - 1);
+  d.setHours(23, 59, 59, 0);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// 从团预设生成补贴申报记录（拉取时的字段映射）
+export function buildSubsidyFromTeamPreset(teamPreset: TeamPreset, options: {
+  id: string;
+  applicationNo: string;
+  createdBy: string;
+  createdByOrg: string;
+}): SubsidyApplication {
+  const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const lockDeadline = calcLockDeadline(teamPreset.travelStart);
+
+  // 按客源地统计团队人数分档
+  const sourcePlaces = Array.from(new Set(teamPreset.tourists.map((t) => t.sourcePlace || t.nationality).filter(Boolean)));
+  const sourcePlaceStr = sourcePlaces.join('、');
+
+  // 提取前5晚酒店名
+  const hotelFirst5Nights = teamPreset.accommodations.slice(0, 5).map((a) => a.hotelName);
+
+  // 4A级以上景区筛选
+  const scenics4APlus = teamPreset.scenics.filter((s) => s.level === '4A' || s.level === '5A');
+
+  // 车号合并去重（guideDrivers中驾驶员的licenseNo视作车号，简化处理）
+  const vehicleNos = Array.from(new Set(
+    teamPreset.guideDrivers
+      .filter((g) => g.type === 'driver')
+      .map((g) => g.licenseNo)
+      .filter(Boolean)
+  ));
+
+  // 客源地分档统计（简化：东盟=东南亚国家，东盟以外其他=欧美等）
+  const aseanCountries = ['泰国', '越南', '马来西亚', '新加坡', '印尼', '菲律宾', '缅甸', '柬埔寨', '老挝', '文莱'];
+  const isAsean = (s: string) => aseanCountries.some((c) => s.includes(c));
+  const isHmt = (s: string) => s.includes('香港') || s.includes('澳门') || s.includes('台湾');
+
+  // 默认填充：根据团客源地自动填充对应的"申请团队人数"
+  const receptionRows = emptyTeamReceptionRows();
+  sourcePlaces.forEach((sp) => {
+    const cnt = teamPreset.tourists.filter((t) => (t.sourcePlace || t.nationality) === sp).length;
+    if (isHmt(sp)) {
+      receptionRows[0].teamSize += cnt; // 港澳台
+    } else if (isAsean(sp)) {
+      receptionRows[1].teamSize += cnt; // 东盟国家
+    } else {
+      receptionRows[2].teamSize += cnt; // 东盟以外其他国家
+    }
+  });
+
+  return {
+    id: options.id,
+    applicationNo: options.applicationNo,
+    teamPresetSnapshot: {
+      teamName: teamPreset.teamName,
+      teamSize: teamPreset.teamSize,
+      inboundTourists: teamPreset.inboundTourists,
+      stayDays: teamPreset.stayDays,
+      travelStart: teamPreset.travelStart,
+      travelEnd: teamPreset.travelEnd,
+      travelDesc: teamPreset.travelDesc,
+      dispatchNo: teamPreset.dispatchNo,
+      targetAgreementNo: teamPreset.targetAgreementNo,
+      flightNo: teamPreset.flightNo,
+      trainNo: teamPreset.trainNo,
+      tourists: teamPreset.tourists,
+      scenics: teamPreset.scenics,
+      accommodations: teamPreset.accommodations,
+      guideDrivers: teamPreset.guideDrivers,
+    },
+    unitName: options.createdByOrg,
+    legalRepresentative: '张文华',
+    operator: options.createdBy,
+    contactPhone: '0851-85888888',
+    bankAccount: {
+      accountName: options.createdByOrg,
+      bankName: '中国工商银行贵阳分行',
+      accountNo: '2402000109201088888',
+    },
+    teamReceptionRows: receptionRows,
+    specialTourismRows: emptySpecialTourismRows(),
+    teamBaseInfo: {
+      teamNo: teamPreset.dispatchNo,
+      travelStartDate: teamPreset.travelStart,
+      travelEndDate: teamPreset.travelEnd,
+      nights: teamPreset.stayDays - 1,
+      days: teamPreset.stayDays,
+      sourcePlace: sourcePlaceStr,
+      hotelFirst5Nights,
+      hotelStar: '五星级',
+      vehicleCount: vehicleNos.length,
+      vehicleNos,
+      scenicCount4APlus: scenics4APlus.length,
+      scenicNames4APlus: scenics4APlus.map((s) => s.name),
+    },
+    culturePromotionRows: emptyCulturePromotionRows(),
+    declaration: {
+      contactPhone: '0851-85888888',
+      date: now.substring(0, 10),
+    },
+    totalAmount: 0,
+    totalTeamSize: teamPreset.teamSize,
+    status: 'draft',
+    createTime: now,
+    updateTime: now,
+    lockDeadline,
+    createdBy: options.createdBy,
+    createdByOrg: options.createdByOrg,
+  };
+}
+
+// 3条 mock 补贴申报记录
+export const MockSubsidyApplications: SubsidyApplication[] = [
+  // 记录1：草稿态，关联团1（韩国首尔-贵州5日游）
+  (() => {
+    const app = buildSubsidyFromTeamPreset(MockTeamPresets[0], {
+      id: 'SUB-2026-0001',
+      applicationNo: 'SUB-2026-0001',
+      createdBy: '李明',
+      createdByOrg: '贵州阳光国际旅行社',
+    });
+    app.createTime = '2026-08-15 10:30:00';
+    app.updateTime = '2026-08-16 14:20:00';
+    app.legalRepresentative = '张文华';
+    app.contactPhone = '0851-85888888';
+    app.bankAccount = { accountName: '贵州阳光国际旅行社', bankName: '中国工商银行贵阳分行', accountNo: '2402000109201088888' };
+    // 用户已填写团队接待奖励金额：东盟以外其他国家 12人 × 30元 = 360元
+    app.teamReceptionRows[2].amount = 360;
+    app.teamReceptionRows[2].teamSize = 12;
+    app.totalAmount = 360;
+    return app;
+  })(),
+  // 记录2：已提交态，关联团2（日本东京-贵州4日游）
+  (() => {
+    const app = buildSubsidyFromTeamPreset(MockTeamPresets[1], {
+      id: 'SUB-2026-0002',
+      applicationNo: 'SUB-2026-0002',
+      createdBy: '李明',
+      createdByOrg: '贵州阳光国际旅行社',
+    });
+    app.createTime = '2026-08-12 09:15:00';
+    app.updateTime = '2026-08-13 16:45:00';
+    app.submitTime = '2026-08-13 16:45:00';
+    app.status = 'submitted';
+    app.legalRepresentative = '张文华';
+    app.contactPhone = '0851-85888888';
+    app.bankAccount = { accountName: '贵州阳光国际旅行社', bankName: '中国工商银行贵阳分行', accountNo: '2402000109201088888' };
+    // 已填写专项奖励：亚洲国家直航 18人 × 10元 = 180元
+    app.specialTourismRows[1].amount = 180;
+    app.specialTourismRows[1].teamSize = 18;
+    app.totalAmount = 180;
+    return app;
+  })(),
+  // 记录3：已锁定态，独立快照（出团日期已过）
+  (() => {
+    const app = buildSubsidyFromTeamPreset({
+      teamName: '新加坡-贵州4日游（已归档）',
+      teamSize: 25,
+      inboundTourists: 25,
+      stayDays: 4,
+      travelStart: '2026-07-15',
+      travelEnd: '2026-07-18',
+      travelDesc: '贵阳入境→黄果树瀑布→西江千户苗寨→贵阳出境',
+      dispatchNo: 'GZ-2026-0715-088',
+      targetAgreementNo: 'TA-2026-088',
+      flightNo: 'MU578',
+      tourists: [
+        { key: 't1', name: 'Tan Wei Ming', idType: 'passport', idNumber: 'SG1234567', nationality: '新加坡', sourcePlace: '新加坡', age: 40, gender: 'male' },
+        { key: 't2', name: 'Lim Ah Beng', idType: 'passport', idNumber: 'SG2345678', nationality: '新加坡', sourcePlace: '新加坡', age: 36, gender: 'male' },
+      ],
+      scenics: [
+        { key: 's1', name: '黄果树瀑布景区', level: '5A', enterTime: '2026-07-16 09:00' },
+        { key: 's2', name: '西江千户苗寨', level: '4A', enterTime: '2026-07-17 10:00' },
+      ],
+      accommodations: [
+        { key: 'a1', hotelName: '贵阳凯宾斯基酒店', checkInDate: '2026-07-15', checkOutDate: '2026-07-16' },
+        { key: 'a2', hotelName: '安顺百灵希尔顿逸林酒店', checkInDate: '2026-07-16', checkOutDate: '2026-07-17' },
+        { key: 'a3', hotelName: '贵阳凯宾斯基酒店', checkInDate: '2026-07-17', checkOutDate: '2026-07-18' },
+      ],
+      guideDrivers: [
+        { key: 'g1', type: 'guide', name: '张小明', licenseNo: 'GZ-2021-0568' },
+        { key: 'g2', type: 'driver', name: '王师傅', licenseNo: '贵A-12345' },
+      ],
+    }, {
+      id: 'SUB-2026-0003',
+      applicationNo: 'SUB-2026-0003',
+      createdBy: '李明',
+      createdByOrg: '贵州阳光国际旅行社',
+    });
+    app.createTime = '2026-07-10 11:00:00';
+    app.updateTime = '2026-07-14 22:30:00';
+    app.submitTime = '2026-07-14 22:30:00';
+    app.status = 'locked'; // 出团日期 2026-07-15，已过锁定时间
+    app.legalRepresentative = '张文华';
+    app.contactPhone = '0851-85888888';
+    app.bankAccount = { accountName: '贵州阳光国际旅行社', bankName: '中国工商银行贵阳分行', accountNo: '2402000109201088888' };
+    // 东盟国家：25人 × 30元 = 750元
+    app.teamReceptionRows[1].amount = 750;
+    app.teamReceptionRows[1].teamSize = 25;
+    app.totalAmount = 750;
+    return app;
+  })(),
+];
+
+// 补贴管理操作日志（与上述3条记录对应）
+export const MockSubsidyOperationLogs: SubsidyOperationLog[] = [
+  { id: 'sol-1', applicationId: 'SUB-2026-0001', operator: '李明', operatorRole: 'applicant', action: 'create', comment: '从团信息[韩国首尔-贵州5日游]拉取创建', time: '2026-08-15 10:30:00' },
+  { id: 'sol-2', applicationId: 'SUB-2026-0001', operator: '李明', operatorRole: 'applicant', action: 'edit', comment: '编辑申报信息', time: '2026-08-16 14:20:00' },
+  { id: 'sol-3', applicationId: 'SUB-2026-0002', operator: '李明', operatorRole: 'applicant', action: 'create', comment: '从团信息[日本东京-贵州4日游]拉取创建', time: '2026-08-12 09:15:00' },
+  { id: 'sol-4', applicationId: 'SUB-2026-0002', operator: '李明', operatorRole: 'applicant', action: 'edit', comment: '完善申报信息', time: '2026-08-13 16:40:00' },
+  { id: 'sol-5', applicationId: 'SUB-2026-0002', operator: '李明', operatorRole: 'applicant', action: 'submit', comment: '提交申报', time: '2026-08-13 16:45:00' },
+  { id: 'sol-6', applicationId: 'SUB-2026-0003', operator: '李明', operatorRole: 'applicant', action: 'create', comment: '从团信息[新加坡-贵州4日游]拉取创建', time: '2026-07-10 11:00:00' },
+  { id: 'sol-7', applicationId: 'SUB-2026-0003', operator: '李明', operatorRole: 'applicant', action: 'submit', comment: '提交申报', time: '2026-07-14 22:30:00' },
+  { id: 'sol-8', applicationId: 'SUB-2026-0003', operator: '系统', operatorRole: 'admin', action: 'lock', comment: '到达锁定时间，自动锁定', time: '2026-07-14 23:59:59' },
 ];
