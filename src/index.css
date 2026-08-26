@@ -45,3 +45,21 @@ body {
   border-radius: 8px;
   overflow: hidden;
 }
+
+/* 富文本编辑器（RichTextEditor）空内容占位符 */
+.rich-text-editor-empty:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+/* 舆情正文富文本展示（图片自适应宽度） */
+.rich-text-content img {
+  max-width: 100%;
+}
+
+/* 暗色侧边菜单内 Badge 根节点默认带 colorText（近黑色），会盖掉菜单文字的浅色继承，
+   导致未选中菜单名不可见（如「公告通知」）；恢复颜色继承，不影响白底区域的徽标 */
+.ant-menu-dark .ant-badge {
+  color: inherit;
+}

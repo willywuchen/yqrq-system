@@ -264,14 +264,16 @@ export default function SubsidyList() {
                 编辑
               </Button>
             )}
-            <Button
-              type="link"
-              size="small"
-              icon={<ExportOutlined />}
-              onClick={() => navigate(`/subsidy/${record.id}`)}
-            >
-              导出
-            </Button>
+            {isApplicant && (
+              <Button
+                type="link"
+                size="small"
+                icon={<ExportOutlined />}
+                onClick={() => navigate(`/subsidy/${record.id}`)}
+              >
+                导出
+              </Button>
+            )}
             {canDelete && (
               <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
                 删除

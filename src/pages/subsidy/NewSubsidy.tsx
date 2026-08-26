@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   Card,
-  Col,
   Descriptions,
   Empty,
   Row,
@@ -25,7 +24,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
-import { MockTeamPresets, type TeamPreset, buildSubsidyFromTeamPreset } from '../../mock/data'
+import { MockTeamPresets, buildSubsidyFromTeamPreset } from '../../mock/data'
 import { genId, nowStr } from '../../utils'
 
 const { Text } = Typography
@@ -197,9 +196,6 @@ export default function NewSubsidy() {
                     {Array.from(new Set(selectedTeam.tourists.map((t) => t.sourcePlace || t.nationality).filter(Boolean))).join('、')}
                   </Space>
                 </Descriptions.Item>
-                <Descriptions.Item label="旅游路线" span={3}>
-                  {selectedTeam.travelDesc}
-                </Descriptions.Item>
                 <Descriptions.Item label="景区" span={3}>
                   <Space wrap>
                     {selectedTeam.scenics.map((s) => (
@@ -239,7 +235,7 @@ export default function NewSubsidy() {
                     icon={<ThunderboltOutlined />}
                     onClick={handleConfirmAndFetch}
                   >
-                    确认并拉取
+                    确认选择
                   </Button>
                 </Space>
               </Row>

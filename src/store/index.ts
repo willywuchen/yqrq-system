@@ -1,7 +1,36 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Application, Attachment, Complaint, Message, UserRole, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleStatus, OpinionHandleLog, SubsidyApplication, SubsidyOperationLog } from '../types'
-import { MockApplications, MockComplaints, MockMessages, MockEnterpriseCertificates, MockPublicOpinions, MockOpinionWarningRules, MockOpinionWarnings, MockOpinionReports, MockSubsidyApplications, MockSubsidyOperationLogs } from '../mock/data'
+import type { Application, Attachment, Complaint, Message, UserRole, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleStatus, OpinionHandleLog, SubsidyApplication, SubsidyOperationLog, ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog, ComplaintSeasonCalendarItem, ComplaintSeason } from '../types'
+import { getDefaultReportTemplates, getDefaultSeasonCalendar } from '../types'
+import { MockApplications, MockComplaints, MockMessages, MockEnterpriseCertificates, MockPublicOpinions, MockOpinionWarningRules, MockOpinionWarnings, MockOpinionReports, MockSubsidyApplications, MockSubsidyOperationLogs, MockComplaintReports, MockComplaintReportTemplates, MockSeasonCalendar, MockComplaintReportArchiveLogs } from '../mock/data'
+import type {
+  Vehicle,
+  TrackPoint,
+  VideoChannel,
+  VideoClip,
+  Transcript,
+  RiskRule,
+  RiskEvent,
+  EvidenceChain,
+  CoachMonitorOperationLog,
+  EventStatus,
+  RegionLevel,
+} from '../types/coach-monitor'
+import {
+  MockVehicles,
+  MockTracks,
+  MockVideoChannels,
+  MockVideoClips,
+  MockTranscripts,
+  MockRiskRules,
+  MockRiskEvents,
+  MockEvidenceChains,
+  MockCoachMonitorLogs,
+} from '../mock/coach-monitor'
+import type { TrainingCategory, TrainingMaterial } from '../types/training'
+import { MockTrainingCategories, MockTrainingMaterials } from '../mock/training'
+import type { Announcement, AnnouncementCategory, AnnouncementConfirmMethod, AnnouncementReadRecord } from '../types/announcements'
+import { MockAnnouncements, MockAnnouncementCategories, MockAnnouncementReads } from '../mock/announcements'
 
 // 深拷贝工具函数（避免循环引用，针对 mock 数据结构优化）
 function deepClone<T>(obj: T): T {
@@ -32,6 +61,28 @@ const DEMO_SNAPSHOT = {
   opinionReports: deepClone(MockOpinionReports),
   subsidyApplications: deepClone(MockSubsidyApplications),
   subsidyOperationLogs: deepClone(MockSubsidyOperationLogs),
+  // 投诉数据报表
+  complaintReports: deepClone(MockComplaintReports),
+  complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+  seasonCalendar: deepClone(MockSeasonCalendar),
+  complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
+  // 旅游包车智慧监管
+  vehicles: deepClone(MockVehicles),
+  tracks: deepClone(MockTracks),
+  videoChannels: deepClone(MockVideoChannels),
+  videoClips: deepClone(MockVideoClips),
+  transcripts: deepClone(MockTranscripts),
+  riskRules: deepClone(MockRiskRules),
+  riskEvents: deepClone(MockRiskEvents),
+  evidenceChains: deepClone(MockEvidenceChains),
+  coachMonitorLogs: deepClone(MockCoachMonitorLogs),
+  // 学习培训管理
+  trainingCategories: deepClone(MockTrainingCategories),
+  trainingMaterials: deepClone(MockTrainingMaterials),
+  // 公告发布管理
+  announcementCategories: deepClone(MockAnnouncementCategories),
+  announcements: deepClone(MockAnnouncements),
+  announcementReads: deepClone(MockAnnouncementReads),
 }
 
 // 企业资质档案（基础材料预存）
@@ -82,6 +133,7 @@ interface AppState {
   // 舆情管理
   publicOpinions: PublicOpinion[]
   addOpinion: (opinion: PublicOpinion) => void
+  addOpinions: (opinions: PublicOpinion[]) => void
   updateOpinion: (id: string, patch: Partial<PublicOpinion>) => void
   deleteOpinion: (id: string) => void
   appendOpinionLog: (id: string, log: OpinionHandleLog) => void
@@ -112,6 +164,89 @@ interface AppState {
   appendSubsidyLog: (log: SubsidyOperationLog) => void
   // 锁定时间检查（前端层面模拟定时任务）
   refreshSubsidyLockStatus: () => void
+
+  // ========== 投诉数据报表 ==========
+  complaintReports: ComplaintReport[]
+  complaintReportTemplates: ComplaintReportTemplate[]
+  seasonCalendar: ComplaintSeasonCalendarItem[]
+  complaintReportArchiveLogs: ComplaintReportArchiveLog[]
+  addComplaintReport: (report: ComplaintReport) => void
+  deleteComplaintReport: (id: string) => void // 软删除（30 天内可恢复）
+  restoreComplaintReport: (id: string) => void
+  appendComplaintReportLog: (log: ComplaintReportArchiveLog) => void
+  updateComplaintReportTemplate: (templateId: string, patch: Partial<ComplaintReportTemplate>) => void
+  restoreDefaultTemplates: () => void
+  updateSeasonCalendar: (month: string, season: ComplaintSeason) => void
+  restoreDefaultSeasonCalendar: () => void
+
+  // ========== 旅游包车智慧监管 ==========
+  // 当前用户的监管层级（仅 final_reviewer / admin 角色启用）
+  // 用于演示三级权限切换，Mock 数据按此过滤
+  coachRegionLevel: RegionLevel
+  setCoachRegionLevel: (level: RegionLevel) => void
+
+  vehicles: Vehicle[]
+  addVehicle: (v: Vehicle) => void
+  updateVehicle: (id: string, patch: Partial<Vehicle>) => void
+  deleteVehicle: (id: string) => void
+
+  tracks: TrackPoint[]
+
+  videoChannels: VideoChannel[]
+  videoClips: VideoClip[]
+  addVideoClip: (clip: VideoClip) => void
+
+  transcripts: Transcript[]
+  addTranscript: (t: Transcript) => void
+
+  riskRules: RiskRule[]
+  addRiskRule: (r: RiskRule) => void
+  updateRiskRule: (id: string, patch: Partial<RiskRule>) => void
+  deleteRiskRule: (id: string) => void
+
+  riskEvents: RiskEvent[]
+  addRiskEvent: (e: RiskEvent) => void
+  updateRiskEvent: (id: string, patch: Partial<RiskEvent>) => void
+  handleRiskEvent: (
+    id: string,
+    action: 'confirm' | 'mark_false' | 'suspend',
+    operator: string,
+    note: string,
+  ) => void
+  archiveRiskEvent: (id: string, operator: string, note: string) => void
+
+  evidenceChains: EvidenceChain[]
+  coachMonitorLogs: CoachMonitorOperationLog[]
+  appendCoachMonitorLog: (log: CoachMonitorOperationLog) => void
+
+  // ========== 学习培训管理 ==========
+  trainingCategories: TrainingCategory[]
+  trainingMaterials: TrainingMaterial[]
+  addTrainingCategory: (cat: TrainingCategory) => void
+  updateTrainingCategory: (id: string, patch: Partial<TrainingCategory>) => void
+  deleteTrainingCategory: (id: string) => void
+  addTrainingMaterial: (m: TrainingMaterial) => void
+  updateTrainingMaterial: (id: string, patch: Partial<TrainingMaterial>) => void
+  deleteTrainingMaterial: (id: string) => void
+  incrementTrainingView: (id: string) => void
+
+  // ========== 公告发布管理 ==========
+  announcementCategories: AnnouncementCategory[]
+  announcements: Announcement[]
+  announcementReads: AnnouncementReadRecord[]
+  addAnnouncementCategory: (cat: AnnouncementCategory) => void
+  updateAnnouncementCategory: (id: string, patch: Partial<AnnouncementCategory>) => void
+  deleteAnnouncementCategory: (id: string) => void
+  addAnnouncement: (a: Announcement) => void
+  updateAnnouncement: (id: string, patch: Partial<Announcement>) => void
+  deleteAnnouncement: (id: string) => void
+  incrementAnnouncementView: (id: string) => void
+  // 阅读留痕：强制公告点"我已阅读并知晓"、普通公告打开详情时调用；同一公告同一账号仅一条（PRD §5.5）
+  markAnnouncementRead: (
+    announcementId: string,
+    account: { id: string; name: string; userType: 'dept' | 'agency'; orgName: string },
+    method: AnnouncementConfirmMethod,
+  ) => void
 }
 
 export const useStore = create<AppState>()(
@@ -181,6 +316,28 @@ export const useStore = create<AppState>()(
           opinionReports: [],
           subsidyApplications: [],
           subsidyOperationLogs: [],
+          // 投诉数据报表：清空报表与日志，保留默认模板与淡旺季日历
+          complaintReports: [],
+          complaintReportArchiveLogs: [],
+          complaintReportTemplates: getDefaultReportTemplates(),
+          seasonCalendar: getDefaultSeasonCalendar(),
+          // 旅游包车智慧监管：仅清空业务数据，保留规则模板
+          vehicles: [],
+          tracks: [],
+          videoChannels: [],
+          videoClips: [],
+          transcripts: [],
+          riskRules: deepClone(MockRiskRules),
+          riskEvents: [],
+          evidenceChains: [],
+          coachMonitorLogs: [],
+          // 学习培训管理：保留默认分类配置，清空资料数据
+          trainingCategories: deepClone(MockTrainingCategories),
+          trainingMaterials: [],
+          // 公告发布管理：保留默认分类配置，清空公告与阅读记录
+          announcementCategories: deepClone(MockAnnouncementCategories),
+          announcements: [],
+          announcementReads: [],
         })
       },
 
@@ -197,6 +354,28 @@ export const useStore = create<AppState>()(
           opinionReports: deepClone(DEMO_SNAPSHOT.opinionReports),
           subsidyApplications: deepClone(DEMO_SNAPSHOT.subsidyApplications),
           subsidyOperationLogs: deepClone(DEMO_SNAPSHOT.subsidyOperationLogs),
+          // 投诉数据报表
+          complaintReports: deepClone(DEMO_SNAPSHOT.complaintReports),
+          complaintReportTemplates: deepClone(DEMO_SNAPSHOT.complaintReportTemplates),
+          seasonCalendar: deepClone(DEMO_SNAPSHOT.seasonCalendar),
+          complaintReportArchiveLogs: deepClone(DEMO_SNAPSHOT.complaintReportArchiveLogs),
+          // 旅游包车智慧监管
+          vehicles: deepClone(DEMO_SNAPSHOT.vehicles),
+          tracks: deepClone(DEMO_SNAPSHOT.tracks),
+          videoChannels: deepClone(DEMO_SNAPSHOT.videoChannels),
+          videoClips: deepClone(DEMO_SNAPSHOT.videoClips),
+          transcripts: deepClone(DEMO_SNAPSHOT.transcripts),
+          riskRules: deepClone(DEMO_SNAPSHOT.riskRules),
+          riskEvents: deepClone(DEMO_SNAPSHOT.riskEvents),
+          evidenceChains: deepClone(DEMO_SNAPSHOT.evidenceChains),
+          coachMonitorLogs: deepClone(DEMO_SNAPSHOT.coachMonitorLogs),
+          // 学习培训管理
+          trainingCategories: deepClone(DEMO_SNAPSHOT.trainingCategories),
+          trainingMaterials: deepClone(DEMO_SNAPSHOT.trainingMaterials),
+          // 公告发布管理
+          announcementCategories: deepClone(DEMO_SNAPSHOT.announcementCategories),
+          announcements: deepClone(DEMO_SNAPSHOT.announcements),
+          announcementReads: deepClone(DEMO_SNAPSHOT.announcementReads),
         }),
 
       // 投诉台账
@@ -220,6 +399,8 @@ export const useStore = create<AppState>()(
       publicOpinions: MockPublicOpinions,
       addOpinion: (opinion) =>
         set((state) => ({ publicOpinions: [opinion, ...state.publicOpinions] })),
+      addOpinions: (opinions) =>
+        set((state) => ({ publicOpinions: [...opinions, ...state.publicOpinions] })),
       updateOpinion: (id, patch) =>
         set((state) => ({
           publicOpinions: state.publicOpinions.map((o) =>
@@ -348,20 +529,329 @@ export const useStore = create<AppState>()(
           }
         })
       },
+
+      // ========== 投诉数据报表 ==========
+      complaintReports: MockComplaintReports,
+      complaintReportTemplates: MockComplaintReportTemplates,
+      seasonCalendar: MockSeasonCalendar,
+      complaintReportArchiveLogs: MockComplaintReportArchiveLogs,
+      addComplaintReport: (report) =>
+        set((state) => ({ complaintReports: [report, ...state.complaintReports] })),
+      deleteComplaintReport: (id) =>
+        set((state) => {
+          const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
+          return {
+            complaintReports: state.complaintReports.map((r) =>
+              r.id === id ? { ...r, deleted: true, deletedAt: now } : r,
+            ),
+          }
+        }),
+      restoreComplaintReport: (id) =>
+        set((state) => ({
+          complaintReports: state.complaintReports.map((r) =>
+            r.id === id ? { ...r, deleted: false, deletedAt: undefined } : r,
+          ),
+        })),
+      appendComplaintReportLog: (log) =>
+        set((state) => ({ complaintReportArchiveLogs: [log, ...state.complaintReportArchiveLogs] })),
+      updateComplaintReportTemplate: (templateId, patch) =>
+        set((state) => ({
+          complaintReportTemplates: state.complaintReportTemplates.map((t) =>
+            t.templateId === templateId ? { ...t, ...patch } : t,
+          ),
+        })),
+      restoreDefaultTemplates: () =>
+        set({ complaintReportTemplates: getDefaultReportTemplates() }),
+      updateSeasonCalendar: (month, season) =>
+        set((state) => ({
+          seasonCalendar: state.seasonCalendar.map((c) =>
+            c.month === month ? { ...c, season } : c,
+          ),
+        })),
+      restoreDefaultSeasonCalendar: () =>
+        set({ seasonCalendar: getDefaultSeasonCalendar() }),
+
+      // ========== 旅游包车智慧监管 ==========
+      // 默认省级视角（final_reviewer / admin 角色）
+      coachRegionLevel: 'province',
+      setCoachRegionLevel: (level) => set({ coachRegionLevel: level }),
+
+      vehicles: MockVehicles,
+      addVehicle: (v) => set((state) => ({ vehicles: [v, ...state.vehicles] })),
+      updateVehicle: (id, patch) =>
+        set((state) => ({
+          vehicles: state.vehicles.map((v) =>
+            v.vehicleId === id
+              ? { ...v, ...patch, updateTime: new Date().toISOString().replace('T', ' ').substring(0, 19) }
+              : v,
+          ),
+        })),
+      deleteVehicle: (id) =>
+        set((state) => ({ vehicles: state.vehicles.filter((v) => v.vehicleId !== id) })),
+
+      tracks: MockTracks,
+
+      videoChannels: MockVideoChannels,
+      videoClips: MockVideoClips,
+      addVideoClip: (clip) => set((state) => ({ videoClips: [clip, ...state.videoClips] })),
+
+      transcripts: MockTranscripts,
+      addTranscript: (t) => set((state) => ({ transcripts: [t, ...state.transcripts] })),
+
+      riskRules: MockRiskRules,
+      addRiskRule: (r) => set((state) => ({ riskRules: [r, ...state.riskRules] })),
+      updateRiskRule: (id, patch) =>
+        set((state) => ({
+          riskRules: state.riskRules.map((r) =>
+            r.ruleId === id
+              ? { ...r, ...patch, updateTime: new Date().toISOString().replace('T', ' ').substring(0, 19) }
+              : r,
+          ),
+        })),
+      deleteRiskRule: (id) =>
+        set((state) => ({ riskRules: state.riskRules.filter((r) => r.ruleId !== id) })),
+
+      riskEvents: MockRiskEvents,
+      addRiskEvent: (e) => set((state) => ({ riskEvents: [e, ...state.riskEvents] })),
+      updateRiskEvent: (id, patch) =>
+        set((state) => ({
+          riskEvents: state.riskEvents.map((e) => (e.eventId === id ? { ...e, ...patch } : e)),
+        })),
+      handleRiskEvent: (id, action, operator, note) =>
+        set((state) => {
+          const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
+          let newStatus: EventStatus = 'pending'
+          if (action === 'confirm') newStatus = 'confirmed'
+          else if (action === 'mark_false') newStatus = 'false_positive'
+          else if (action === 'suspend') newStatus = 'suspended'
+          return {
+            riskEvents: state.riskEvents.map((e) =>
+              e.eventId === id
+                ? { ...e, status: newStatus, handledBy: operator, handleNote: note, handleTime: now }
+                : e,
+            ),
+          }
+        }),
+      archiveRiskEvent: (id, operator, note) =>
+        set((state) => {
+          const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
+          const event = state.riskEvents.find((e) => e.eventId === id)
+          if (!event) return state
+          const evidenceId = `EV${Date.now()}`
+          const clipIds = event.videoClipId ? [event.videoClipId] : []
+          const newEvidence: EvidenceChain = {
+            evidenceId,
+            eventId: id,
+            vehicleId: event.vehicleId,
+            videoClipIds: clipIds,
+            transcriptIds: [event.transcriptId],
+            ruleId: event.ruleId,
+            hitKeywords: event.hitKeywords,
+            occurredAt: event.occurredAt,
+            trackPoints: state.tracks.filter((t) => t.vehicleId === event.vehicleId),
+            archivedBy: operator,
+            archivedAt: now,
+            note: note || event.handleNote,
+          }
+          return {
+            riskEvents: state.riskEvents.map((e) =>
+              e.eventId === id
+                ? { ...e, status: 'archived' as const, handledBy: operator, handleNote: note, handleTime: now, evidenceChainId: evidenceId }
+                : e,
+            ),
+            evidenceChains: [newEvidence, ...state.evidenceChains],
+          }
+        }),
+
+      evidenceChains: MockEvidenceChains,
+      coachMonitorLogs: MockCoachMonitorLogs,
+      appendCoachMonitorLog: (log) =>
+        set((state) => ({ coachMonitorLogs: [log, ...state.coachMonitorLogs] })),
+
+      // ========== 学习培训管理 ==========
+      trainingCategories: MockTrainingCategories,
+      trainingMaterials: MockTrainingMaterials,
+      addTrainingCategory: (cat) =>
+        set((state) => ({ trainingCategories: [cat, ...state.trainingCategories] })),
+      updateTrainingCategory: (id, patch) =>
+        set((state) => ({
+          trainingCategories: state.trainingCategories.map((c) =>
+            c.id === id ? { ...c, ...patch } : c,
+          ),
+        })),
+      deleteTrainingCategory: (id) =>
+        set((state) => ({ trainingCategories: state.trainingCategories.filter((c) => c.id !== id) })),
+      addTrainingMaterial: (m) =>
+        set((state) => ({ trainingMaterials: [m, ...state.trainingMaterials] })),
+      updateTrainingMaterial: (id, patch) =>
+        set((state) => ({
+          trainingMaterials: state.trainingMaterials.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+        })),
+      deleteTrainingMaterial: (id) =>
+        set((state) => ({ trainingMaterials: state.trainingMaterials.filter((m) => m.id !== id) })),
+      incrementTrainingView: (id) =>
+        set((state) => ({
+          trainingMaterials: state.trainingMaterials.map((m) =>
+            m.id === id ? { ...m, viewCount: m.viewCount + 1 } : m,
+          ),
+        })),
+
+      // ========== 公告发布管理 ==========
+      announcementCategories: deepClone(MockAnnouncementCategories),
+      announcements: deepClone(MockAnnouncements),
+      announcementReads: deepClone(MockAnnouncementReads),
+      addAnnouncementCategory: (cat) =>
+        set((state) => ({ announcementCategories: [cat, ...state.announcementCategories] })),
+      updateAnnouncementCategory: (id, patch) =>
+        set((state) => ({
+          announcementCategories: state.announcementCategories.map((c) =>
+            c.id === id ? { ...c, ...patch } : c,
+          ),
+        })),
+      deleteAnnouncementCategory: (id) =>
+        set((state) => ({
+          announcementCategories: state.announcementCategories.filter((c) => c.id !== id),
+        })),
+      addAnnouncement: (a) => set((state) => ({ announcements: [a, ...state.announcements] })),
+      updateAnnouncement: (id, patch) =>
+        set((state) => ({
+          announcements: state.announcements.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+        })),
+      deleteAnnouncement: (id) =>
+        set((state) => ({
+          announcements: state.announcements.filter((a) => a.id !== id),
+          // 公告删除时同步清理其阅读记录（仅草稿/已下架可删，PRD §5.3）
+          announcementReads: state.announcementReads.filter((r) => r.announcementId !== id),
+        })),
+      incrementAnnouncementView: (id) =>
+        set((state) => ({
+          announcements: state.announcements.map((a) =>
+            a.id === id ? { ...a, viewCount: a.viewCount + 1 } : a,
+          ),
+        })),
+      markAnnouncementRead: (announcementId, account, method) =>
+        set((state) => {
+          const exists = state.announcementReads.some(
+            (r) => r.announcementId === announcementId && r.userId === account.id,
+          )
+          if (exists) return state
+          return {
+            announcementReads: [
+              {
+                id: `aread-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                announcementId,
+                userId: account.id,
+                userName: account.name,
+                userType: account.userType,
+                orgName: account.orgName,
+                confirmMethod: method,
+                readTime: new Date().toISOString().replace('T', ' ').substring(0, 19),
+              },
+              ...state.announcementReads,
+            ],
+          }
+        }),
     }),
     {
       name: 'yqrq-store',
       // 数据版本：当 mock 数据结构发生变化时递增
-      // 版本不匹配时，subsidy 数据会被重置为最新 mock 数据
-      version: 2,
+      // 版本不匹配时，对应模块数据会被重置为最新 mock 数据
+      version: 10,
       migrate: (persistedState: any, version) => {
         // 版本 < 2：补贴管理 mock 数据结构调整（团队接待奖励由9行合并为3行）
-        // 直接重置补贴相关数据为最新 mock 数据
         if (version < 2) {
-          return {
+          persistedState = {
             ...persistedState,
             subsidyApplications: deepClone(MockSubsidyApplications),
             subsidyOperationLogs: deepClone(MockSubsidyOperationLogs),
+          }
+        }
+        // 版本 < 3：新增旅游包车智慧监管模块，初始化全部 mock 数据
+        if (version < 3) {
+          persistedState = {
+            ...persistedState,
+            coachRegionLevel: 'province',
+            vehicles: deepClone(MockVehicles),
+            tracks: deepClone(MockTracks),
+            videoChannels: deepClone(MockVideoChannels),
+            videoClips: deepClone(MockVideoClips),
+            transcripts: deepClone(MockTranscripts),
+            riskRules: deepClone(MockRiskRules),
+            riskEvents: deepClone(MockRiskEvents),
+            evidenceChains: deepClone(MockEvidenceChains),
+            coachMonitorLogs: deepClone(MockCoachMonitorLogs),
+          }
+        }
+        // 版本 < 4：新增投诉数据报表模块，初始化全部 mock 数据
+        if (version < 4) {
+          persistedState = {
+            ...persistedState,
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+            seasonCalendar: deepClone(MockSeasonCalendar),
+            complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
+          }
+        }
+        // 版本 < 5：V1.2 报表结构调整（新增聚类分析段、弱化办理质量、注入模拟风险研判段）
+        // 同步补充 4 条 8 月投诉，用于演示同一商家重复投诉、区域×类型高发组合
+        if (version < 5) {
+          persistedState = {
+            ...persistedState,
+            complaints: deepClone(MockComplaints),
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+          }
+        }
+        // 版本 < 6：V1.3 研判分析收敛到风险研判段（移除聚类分析独立章，新增关键词/环比/风险等级/舆情关联/典型案例）
+        if (version < 6) {
+          persistedState = {
+            ...persistedState,
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+          }
+        }
+        // 版本 < 7：修复 HMR 期间旧快照缺 V1.3 字段导致预览崩溃；强制重置报表/投诉/模板为最新结构
+        if (version < 7) {
+          persistedState = {
+            ...persistedState,
+            complaints: deepClone(MockComplaints),
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+          }
+        }
+        // 版本 < 8：新增学习培训管理模块，初始化全部 mock 数据
+        if (version < 8) {
+          persistedState = {
+            ...persistedState,
+            trainingCategories: deepClone(MockTrainingCategories),
+            trainingMaterials: deepClone(MockTrainingMaterials),
+          }
+        }
+        // 版本 < 9：新增公告发布管理模块，初始化全部 mock 数据
+        if (version < 9) {
+          persistedState = {
+            ...persistedState,
+            announcementCategories: deepClone(MockAnnouncementCategories),
+            announcements: deepClone(MockAnnouncements),
+            announcementReads: deepClone(MockAnnouncementReads),
+          }
+        }
+        // 版本 < 10：演示人物"陈厅长"统一更名为"陈华"，重置含操作人姓名的数据集
+        if (version < 10) {
+          persistedState = {
+            ...persistedState,
+            applications: deepClone(MockApplications),
+            complaints: deepClone(MockComplaints),
+            publicOpinions: deepClone(MockPublicOpinions),
+            warnings: deepClone(MockOpinionWarnings),
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
+            riskEvents: deepClone(MockRiskEvents),
+            evidenceChains: deepClone(MockEvidenceChains),
+            coachMonitorLogs: deepClone(MockCoachMonitorLogs),
+            announcements: deepClone(MockAnnouncements),
+            announcementReads: deepClone(MockAnnouncementReads),
+            trainingMaterials: deepClone(MockTrainingMaterials),
           }
         }
         return persistedState
@@ -378,6 +868,29 @@ export const useStore = create<AppState>()(
         opinionReports: state.opinionReports,
         subsidyApplications: state.subsidyApplications,
         subsidyOperationLogs: state.subsidyOperationLogs,
+        // 投诉数据报表
+        complaintReports: state.complaintReports,
+        complaintReportTemplates: state.complaintReportTemplates,
+        seasonCalendar: state.seasonCalendar,
+        complaintReportArchiveLogs: state.complaintReportArchiveLogs,
+        // 旅游包车智慧监管
+        coachRegionLevel: state.coachRegionLevel,
+        vehicles: state.vehicles,
+        tracks: state.tracks,
+        videoChannels: state.videoChannels,
+        videoClips: state.videoClips,
+        transcripts: state.transcripts,
+        riskRules: state.riskRules,
+        riskEvents: state.riskEvents,
+        evidenceChains: state.evidenceChains,
+        coachMonitorLogs: state.coachMonitorLogs,
+        // 学习培训管理
+        trainingCategories: state.trainingCategories,
+        trainingMaterials: state.trainingMaterials,
+        // 公告发布管理
+        announcementCategories: state.announcementCategories,
+        announcements: state.announcements,
+        announcementReads: state.announcementReads,
       }),
     },
   ),

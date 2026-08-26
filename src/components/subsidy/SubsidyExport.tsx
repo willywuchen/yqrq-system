@@ -2,7 +2,7 @@ import { Modal, Radio, App, Space, Typography, Alert } from 'antd'
 import { ExportOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useStore } from '../../store'
-import { nowStr } from '../../utils'
+import { nowStr, maskIdNumber, maskPhone } from '../../utils'
 
 const { Text } = Typography
 
@@ -38,10 +38,10 @@ export default function SubsidyExport({ open, onClose, applicationId }: Props) {
         <td style="text-align:center">${i + 1}</td>
         <td>${t.name || ''}</td>
         <td style="text-align:center">${t.idType === 'passport' ? '护照' : t.idType === 'hk_macao_pass' ? '港澳通行证' : t.idType === 'tw_pass' ? '台湾通行证' : '其他'}</td>
-        <td>${t.idNumber || ''}</td>
+        <td>${maskIdNumber(t.idNumber)}</td>
         <td style="text-align:center">${t.nationality || ''}</td>
         <td>${t.sourcePlace || ''}</td>
-        <td>${t.phone || ''}</td>
+        <td>${maskPhone(t.phone)}</td>
       </tr>`,
       )
       .join('')

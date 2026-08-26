@@ -1,5 +1,8 @@
 import type { Application, Complaint, Message, RewardCategory, TouristItem, ScenicInfo, AccommodationInfo, GuideDriverInfo, Attachment, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleLog } from '../types';
 import { POLICY_CONSTANTS } from '../types';
+import type { ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog, ComplaintSeasonCalendarItem } from '../types';
+import { getDefaultReportTemplates, getDefaultSeasonCalendar, DEFAULT_REPORT_CHAPTERS } from '../types';
+import { buildComplaintReportSnapshot, buildReportSummary } from '../utils';
 
 // 当前年度预算（万元）
 export const BUDGET_TOTAL = 5000;
@@ -467,11 +470,11 @@ export const MockApplications: Application[] = [
     ],
     auditLogs: [
       { id: 'a4', stage: 'pre_check', operator: '张华', operatorRole: 'applicant', action: 'submit', comment: '提交前置审核', time: '2025-10-15 10:00:00' },
-      { id: 'a5', stage: 'pre_check', operator: '陈厅长', operatorRole: 'final_reviewer', action: 'pre_check_pass', comment: '前置审核通过', time: '2025-10-25 16:00:00' },
+      { id: 'a5', stage: 'pre_check', operator: '陈华', operatorRole: 'final_reviewer', action: 'pre_check_pass', comment: '前置审核通过', time: '2025-10-25 16:00:00' },
       { id: 'a6', stage: 'initial', operator: '张华', operatorRole: 'applicant', action: 'submit', time: '2027-01-05 11:00:00' },
       { id: 'a7', stage: 'initial', operator: '王芳', operatorRole: 'initial_reviewer', action: 'pass', comment: '初审通过', time: '2027-01-08 15:00:00' },
       { id: 'a8', stage: 'review', operator: '刘强', operatorRole: 'review_reviewer', action: 'pass', comment: '复审通过', time: '2027-01-15 10:00:00' },
-      { id: 'a9', stage: 'final', operator: '陈厅长', operatorRole: 'final_reviewer', action: 'pass', comment: '终审通过，核定5万元', time: '2027-01-20 16:30:00' },
+      { id: 'a9', stage: 'final', operator: '陈华', operatorRole: 'final_reviewer', action: 'pass', comment: '终审通过，核定5万元', time: '2027-01-20 16:30:00' },
     ],
   },
   {
@@ -534,7 +537,7 @@ export const MockApplications: Application[] = [
       { id: 'a10', stage: 'initial', operator: '王磊', operatorRole: 'applicant', action: 'submit', time: '2026-12-28 10:00:00' },
       { id: 'a11', stage: 'initial', operator: '王芳', operatorRole: 'initial_reviewer', action: 'pass', time: '2027-01-03 10:00:00' },
       { id: 'a12', stage: 'review', operator: '刘强', operatorRole: 'review_reviewer', action: 'pass', time: '2027-01-08 14:00:00' },
-      { id: 'a13', stage: 'final', operator: '陈厅长', operatorRole: 'final_reviewer', action: 'pass', time: '2027-01-15 10:00:00' },
+      { id: 'a13', stage: 'final', operator: '陈华', operatorRole: 'final_reviewer', action: 'pass', time: '2027-01-15 10:00:00' },
       { id: 'a14', stage: 'payment', operator: '财务-赵敏', operatorRole: 'admin', action: 'pay', comment: '资金已拨付', time: '2027-01-25 14:00:00' },
     ],
   },
@@ -614,7 +617,7 @@ export const MockApplications: Application[] = [
       { id: 'a18', stage: 'initial', operator: '陈伟', operatorRole: 'applicant', action: 'submit', time: '2027-01-02 09:00:00' },
       { id: 'a19', stage: 'initial', operator: '王芳', operatorRole: 'initial_reviewer', action: 'pass', time: '2027-01-05 10:00:00' },
       { id: 'a20', stage: 'review', operator: '刘强', operatorRole: 'review_reviewer', action: 'pass', time: '2027-01-12 11:00:00' },
-      { id: 'a21', stage: 'final', operator: '陈厅长', operatorRole: 'final_reviewer', action: 'pass', comment: '进入公示', time: '2027-01-22 16:00:00' },
+      { id: 'a21', stage: 'final', operator: '陈华', operatorRole: 'final_reviewer', action: 'pass', comment: '进入公示', time: '2027-01-22 16:00:00' },
     ],
   },
 ];
@@ -906,6 +909,93 @@ export const MockComplaints: Complaint[] = [
       { id: 'ol15', operator: '管理员', action: 'process', summary: '填写办理意见，标记诉转案', time: '2026-08-01 14:00:00' },
     ],
   },
+  // V1.2：以下 4 条投诉用于演示聚类分析（同一商家重复投诉、同一区域×相同类型高发组合）
+  {
+    id: 'TS-20260815-0006',
+    title: '旅行社擅自增加自费项目',
+    province: '贵州省',
+    city: '贵阳市',
+    district: '南明区',
+    complaintMethod: 'phone',
+    tourismCategory: 'travel_agency',
+    complaintTime: '2026-08-15',
+    status: 'processing',
+    complainant: { name: '孙九', gender: 'female', phone: '139****2233', contractDate: '2026-08-10' },
+    respondent: { name: '贵州阳光国际旅行社', address: '贵阳市南明区花果园大街1号', phone: '0851-85123456' },
+    content: '参加贵州阳光国际旅行社组织的"西江千户苗寨2日游"，导游在行程中强制增加自费项目，不参加就被孤立，与8月初同类问题如出一辙。',
+    requests: '要求查处并退还自费项目费用',
+    handlerOpinion: '已约谈旅行社，要求立即整改并退还费用。',
+    replyStatus: 'none',
+    attachments: [],
+    createdBy: '管理员',
+    createTime: '2026-08-15 10:20:00',
+    updateTime: '2026-08-15 10:20:00',
+    operationLogs: [{ id: 'ol16', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-15 10:20:00' }],
+  },
+  {
+    id: 'TS-20260816-0007',
+    title: '旅行社合同违约拒绝退款',
+    province: '贵州省',
+    city: '贵阳市',
+    district: '云岩区',
+    complaintMethod: 'hotline_12345',
+    tourismCategory: 'travel_agency',
+    complaintTime: '2026-08-16',
+    status: 'pending',
+    complainant: { name: '周十', gender: 'male', phone: '137****4455', contractDate: '2026-08-12' },
+    respondent: { name: '贵州阳光国际旅行社', address: '贵阳市南明区花果园大街1号', phone: '0851-85123456' },
+    content: '贵州阳光国际旅行社未按合同约定提供4星级住宿，实际安排快捷酒店，要求退差价被拒，该旅行社近期投诉频发。',
+    requests: '要求退还住宿差价并赔偿',
+    replyStatus: 'none',
+    attachments: [{ uid: 'c8', name: '住宿对比照片.jpg', size: 96000, type: 'image/jpeg', uploadTime: '2026-08-16 09:00:00', title: '现场照片' }],
+    createdBy: '管理员',
+    createTime: '2026-08-16 09:10:00',
+    updateTime: '2026-08-16 09:10:00',
+    operationLogs: [{ id: 'ol17', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-16 09:10:00' }],
+  },
+  {
+    id: 'TS-20260818-0008',
+    title: '景区强制拍照收费',
+    province: '贵州省',
+    city: '安顺市',
+    district: '镇宁布依族苗族自治县',
+    complaintMethod: 'hotline_12345',
+    tourismCategory: 'scenic_area',
+    complaintTime: '2026-08-18',
+    status: 'processing',
+    complainant: { name: '吴十一', gender: 'male', phone: '135****7788', contractDate: '2026-08-16' },
+    respondent: { name: '黄果树瀑布景区', address: '安顺市镇宁布依族苗族自治县黄果树镇', phone: '0851-33591111' },
+    content: '黄果树瀑布景区内多处设点强制游客拍照并收费，不付费不让通过，与8月初门票未公示问题叠加，管理混乱。',
+    requests: '要求取消强制拍照收费并公示',
+    handlerOpinion: '已要求景区管理处核实并整改。',
+    replyStatus: 'none',
+    attachments: [],
+    createdBy: '管理员',
+    createTime: '2026-08-18 14:00:00',
+    updateTime: '2026-08-18 14:00:00',
+    operationLogs: [{ id: 'ol18', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-18 14:00:00' }],
+  },
+  {
+    id: 'TS-20260819-0009',
+    title: '景区停车乱收费',
+    province: '贵州省',
+    city: '安顺市',
+    district: '镇宁布依族苗族自治县',
+    complaintMethod: 'phone',
+    tourismCategory: 'scenic_area',
+    complaintTime: '2026-08-19',
+    status: 'pending',
+    complainant: { name: '郑十二', gender: 'female', phone: '138****1100', contractDate: '2026-08-17' },
+    respondent: { name: '黄果树瀑布景区', address: '安顺市镇宁布依族苗族自治县黄果树镇', phone: '0851-33591111' },
+    content: '黄果树瀑布景区停车场无收费公示牌，收费员随意要价，比公示标准多收20元，要求退还。',
+    requests: '要求退还多收停车费并规范收费',
+    replyStatus: 'none',
+    attachments: [],
+    createdBy: '管理员',
+    createTime: '2026-08-19 11:00:00',
+    updateTime: '2026-08-19 11:00:00',
+    operationLogs: [{ id: 'ol19', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-19 11:00:00' }],
+  },
 ];
 
 // ========== 团信息预设数据（模拟用户提前填报的团信息） ==========
@@ -1102,7 +1192,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(1, 10, 0),
     handleLogs: [
       makeLog('舆情系统', 'create', '自动从舆情系统抓取入库', 3),
-      makeLog('陈厅长', 'process', '转贵阳市文旅局核实处理', 1, 'pending', 'processing'),
+      makeLog('陈华', 'process', '转贵阳市文旅局核实处理', 1, 'pending', 'processing'),
     ],
   },
   {
@@ -1155,8 +1245,8 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(2, 16, 0),
     handleLogs: [
       makeLog('网信办', 'create', '网信办推送', 7),
-      makeLog('陈厅长', 'process', '转黔东南州文旅局核实', 5, 'pending', 'processing'),
-      makeLog('陈厅长', 'handle', '民宿被责令停业整改，已回复原作者', 2, 'processing', 'handled'),
+      makeLog('陈华', 'process', '转黔东南州文旅局核实', 5, 'pending', 'processing'),
+      makeLog('陈华', 'handle', '民宿被责令停业整改，已回复原作者', 2, 'processing', 'handled'),
     ],
   },
   {
@@ -1183,7 +1273,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(6, 9, 0),
     handleLogs: [
       makeLog('管理员', 'create', '手动录入正面舆情', 8),
-      makeLog('陈厅长', 'handle', '作为正面案例归档，可用于行业标杆宣传', 6, 'pending', 'handled'),
+      makeLog('陈华', 'handle', '作为正面案例归档，可用于行业标杆宣传', 6, 'pending', 'handled'),
     ],
   },
   {
@@ -1235,7 +1325,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(4, 10, 0),
     handleLogs: [
       makeLog('省公安厅', 'create', '省公安厅推送，涉交通秩序', 12),
-      makeLog('陈厅长', 'process', '转毕节市交警与文旅局联合处置', 4, 'pending', 'processing'),
+      makeLog('陈华', 'process', '转毕节市交警与文旅局联合处置', 4, 'pending', 'processing'),
     ],
   },
   {
@@ -1261,7 +1351,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(13, 10, 0),
     handleLogs: [
       makeLog('舆情系统', 'create', '正面宣传内容，可放大营销', 15),
-      makeLog('陈厅长', 'handle', '转营销处用于宣传素材', 13, 'pending', 'handled'),
+      makeLog('陈华', 'handle', '转营销处用于宣传素材', 13, 'pending', 'handled'),
     ],
   },
   {
@@ -1288,8 +1378,8 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(14, 17, 0),
     handleLogs: [
       makeLog('网信办', 'create', '涉安全事故，红色预警', 18),
-      makeLog('陈厅长', 'process', '启动应急预案，转六盘水市文旅局+市监局', 17, 'pending', 'processing'),
-      makeLog('陈厅长', 'handle', '景区增配安全员和医疗点，已处理完毕', 14, 'processing', 'handled'),
+      makeLog('陈华', 'process', '启动应急预案，转六盘水市文旅局+市监局', 17, 'pending', 'processing'),
+      makeLog('陈华', 'handle', '景区增配安全员和医疗点，已处理完毕', 14, 'processing', 'handled'),
     ],
   },
   {
@@ -1341,8 +1431,8 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(15, 11, 0),
     handleLogs: [
       makeLog('舆情系统', 'create', '负面高敏感舆情，自动触发橙色预警', 25),
-      makeLog('陈厅长', 'process', '转市监局+文旅执法大队', 22, 'pending', 'processing'),
-      makeLog('陈厅长', 'handle', '旅行社停业整顿并处罚款，已回复投诉人', 15, 'processing', 'handled'),
+      makeLog('陈华', 'process', '转市监局+文旅执法大队', 22, 'pending', 'processing'),
+      makeLog('陈华', 'handle', '旅行社停业整顿并处罚款，已回复投诉人', 15, 'processing', 'handled'),
     ],
   },
   {
@@ -1367,7 +1457,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(26, 9, 0),
     handleLogs: [
       makeLog('管理员', 'create', '手动录入正面舆情', 28),
-      makeLog('陈厅长', 'handle', '归档为正面案例', 26, 'pending', 'handled'),
+      makeLog('陈华', 'handle', '归档为正面案例', 26, 'pending', 'handled'),
     ],
   },
   {
@@ -1393,7 +1483,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(20, 10, 0),
     handleLogs: [
       makeLog('舆情系统', 'create', '自动抓取入库', 32),
-      makeLog('陈厅长', 'process', '转安顺市监局核实价格', 20, 'pending', 'processing'),
+      makeLog('陈华', 'process', '转安顺市监局核实价格', 20, 'pending', 'processing'),
     ],
   },
   {
@@ -1420,7 +1510,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(38, 9, 0),
     handleLogs: [
       makeLog('网信办', 'create', '央媒推送', 40),
-      makeLog('陈厅长', 'handle', '转宣传处用于对外推介', 38, 'pending', 'handled'),
+      makeLog('陈华', 'handle', '转宣传处用于对外推介', 38, 'pending', 'handled'),
     ],
   },
   {
@@ -1473,8 +1563,8 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(42, 16, 0),
     handleLogs: [
       makeLog('省公安厅', 'create', '涉安全装备，红色预警', 50),
-      makeLog('陈厅长', 'process', '启动应急预案，景区停业整改', 48, 'pending', 'processing'),
-      makeLog('陈厅长', 'handle', '景区完成整改复检通过，恢复营业', 42, 'processing', 'handled'),
+      makeLog('陈华', 'process', '启动应急预案，景区停业整改', 48, 'pending', 'processing'),
+      makeLog('陈华', 'handle', '景区完成整改复检通过，恢复营业', 42, 'processing', 'handled'),
     ],
   },
   {
@@ -1501,7 +1591,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(52, 9, 0),
     handleLogs: [
       makeLog('舆情系统', 'create', '境外平台正面评价', 55),
-      makeLog('陈厅长', 'handle', '转入境游营销用于宣传', 52, 'pending', 'handled'),
+      makeLog('陈华', 'handle', '转入境游营销用于宣传', 52, 'pending', 'handled'),
     ],
   },
   {
@@ -1551,7 +1641,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(62, 9, 0),
     handleLogs: [
       makeLog('管理员', 'create', '手动录入正面案例', 65),
-      makeLog('陈厅长', 'handle', '作为非遗旅游推广素材', 62, 'pending', 'handled'),
+      makeLog('陈华', 'handle', '作为非遗旅游推广素材', 62, 'pending', 'handled'),
     ],
   },
   {
@@ -1577,7 +1667,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(50, 10, 0),
     handleLogs: [
       makeLog('舆情系统', 'create', '自动抓取入库', 70),
-      makeLog('陈厅长', 'process', '转安顺文旅局督促整改', 50, 'pending', 'processing'),
+      makeLog('陈华', 'process', '转安顺文旅局督促整改', 50, 'pending', 'processing'),
     ],
   },
   {
@@ -1602,7 +1692,7 @@ export const MockPublicOpinions: PublicOpinion[] = [
     updateTime: opinionTime(72, 9, 0),
     handleLogs: [
       makeLog('管理员', 'create', '手动录入正面案例', 75),
-      makeLog('陈厅长', 'handle', '作为公共服务标杆案例', 72, 'pending', 'handled'),
+      makeLog('陈华', 'handle', '作为公共服务标杆案例', 72, 'pending', 'handled'),
     ],
   },
 ];
@@ -1680,7 +1770,7 @@ export const MockOpinionWarnings: OpinionWarning[] = [
     relatedComplaintIds: [],
     summary: '黄果树瀑布景区排队3小时游客怒发抖音 - 触发关键词"安全事故"附近词',
     handled: true,
-    handleBy: '陈厅长',
+    handleBy: '陈华',
     handleTime: opinionTime(4, 10, 0),
     handleOpinion: '转安顺市文旅局督促整改，已回复原作者',
   },
@@ -1694,7 +1784,7 @@ export const MockOpinionWarnings: OpinionWarning[] = [
     relatedComplaintIds: [],
     summary: '马岭河峡谷漂流安全装备问题 - 风险等级=极高',
     handled: true,
-    handleBy: '陈厅长',
+    handleBy: '陈华',
     handleTime: opinionTime(42, 16, 0),
     handleOpinion: '启动应急预案，景区完成整改复检通过',
   },
@@ -1719,7 +1809,7 @@ export const MockOpinionWarnings: OpinionWarning[] = [
     relatedComplaintIds: [],
     summary: '黔东南民宿卫生问题 - 住宿类负面',
     handled: true,
-    handleBy: '陈厅长',
+    handleBy: '陈华',
     handleTime: opinionTime(2, 16, 0),
     handleOpinion: '民宿被责令停业整改',
   },
@@ -1797,9 +1887,9 @@ import type { SubsidyApplication, SubsidyOperationLog } from '../types';
 // 补贴申报 - 默认空行模板生成器
 export function emptyTeamReceptionRows() {
   return [
-    { key: 'tr1', project: '港澳台地区', amount: 0, teamSize: 0 },
-    { key: 'tr2', project: '东盟国家', amount: 0, teamSize: 0 },
-    { key: 'tr3', project: '东盟以外其他国家', amount: 0, teamSize: 0 },
+    { key: 'tr1', project: '港澳台地区（一档、二档、三档）', amount: 0, teamSize: 0 },
+    { key: 'tr2', project: '东盟国家（一档、二档、三档）', amount: 0, teamSize: 0 },
+    { key: 'tr3', project: '东盟以外其他国家（一档、二档、三档）', amount: 0, teamSize: 0 },
   ];
 }
 
@@ -1823,10 +1913,9 @@ export function emptyCulturePromotionRows() {
   ];
 }
 
-// 锁定截止时间计算：出团日期前一日 23:59:59
-export function calcLockDeadline(travelStart: string): string {
-  const d = new Date(travelStart);
-  d.setDate(d.getDate() - 1);
+// 锁定截止时间计算：行程结束日当日 23:59:59（行程结束当日仍可修改，次日 00:00 锁定）
+export function calcLockDeadline(travelEnd: string): string {
+  const d = new Date(travelEnd);
   d.setHours(23, 59, 59, 0);
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -1840,7 +1929,7 @@ export function buildSubsidyFromTeamPreset(teamPreset: TeamPreset, options: {
   createdByOrg: string;
 }): SubsidyApplication {
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
-  const lockDeadline = calcLockDeadline(teamPreset.travelStart);
+  const lockDeadline = calcLockDeadline(teamPreset.travelEnd);
 
   // 按客源地统计团队人数分档
   const sourcePlaces = Array.from(new Set(teamPreset.tourists.map((t) => t.sourcePlace || t.nationality).filter(Boolean)));
@@ -1893,7 +1982,12 @@ export function buildSubsidyFromTeamPreset(teamPreset: TeamPreset, options: {
       targetAgreementNo: teamPreset.targetAgreementNo,
       flightNo: teamPreset.flightNo,
       trainNo: teamPreset.trainNo,
-      tourists: teamPreset.tourists,
+      tourists: teamPreset.tourists.map((t, i) => ({
+        ...t,
+        birthDate: t.birthDate || (t.age ? `${new Date().getFullYear() - t.age}-01-01` : ''),
+        contractStatus: t.contractStatus || '已签订',
+        contractNo: t.contractNo || `${teamPreset.dispatchNo}-C${i + 1}`,
+      })),
       scenics: teamPreset.scenics,
       accommodations: teamPreset.accommodations,
       guideDrivers: teamPreset.guideDrivers,
@@ -1917,7 +2011,7 @@ export function buildSubsidyFromTeamPreset(teamPreset: TeamPreset, options: {
       days: teamPreset.stayDays,
       sourcePlace: sourcePlaceStr,
       hotelFirst5Nights,
-      hotelStar: '五星级',
+      hotelStar: '5星级或同等档次',
       vehicleCount: vehicleNos.length,
       vehicleNos,
       scenicCount4APlus: scenics4APlus.length,
@@ -1997,6 +2091,8 @@ export const MockSubsidyApplications: SubsidyApplication[] = [
       tourists: [
         { key: 't1', name: 'Tan Wei Ming', idType: 'passport', idNumber: 'SG1234567', nationality: '新加坡', sourcePlace: '新加坡', age: 40, gender: 'male' },
         { key: 't2', name: 'Lim Ah Beng', idType: 'passport', idNumber: 'SG2345678', nationality: '新加坡', sourcePlace: '新加坡', age: 36, gender: 'male' },
+        // 复游游客：与申报2日本团为同一人（证件号相同），二次随团入黔，统计上总人次+1、总数不重复计
+        { key: 't3', name: 'Tanaka Hiroshi', idType: 'passport', idNumber: 'JP1234567', nationality: '日本', sourcePlace: '新加坡', age: 45, gender: 'male' },
       ],
       scenics: [
         { key: 's1', name: '黄果树瀑布景区', level: '5A', enterTime: '2026-07-16 09:00' },
@@ -2042,4 +2138,103 @@ export const MockSubsidyOperationLogs: SubsidyOperationLog[] = [
   { id: 'sol-6', applicationId: 'SUB-2026-0003', operator: '李明', operatorRole: 'applicant', action: 'create', comment: '从团信息[新加坡-贵州4日游]拉取创建', time: '2026-07-10 11:00:00' },
   { id: 'sol-7', applicationId: 'SUB-2026-0003', operator: '李明', operatorRole: 'applicant', action: 'submit', comment: '提交申报', time: '2026-07-14 22:30:00' },
   { id: 'sol-8', applicationId: 'SUB-2026-0003', operator: '系统', operatorRole: 'admin', action: 'lock', comment: '到达锁定时间，自动锁定', time: '2026-07-14 23:59:59' },
+];
+
+// ========== Mock 投诉数据报表 ==========
+export const MockComplaintReportTemplates: ComplaintReportTemplate[] = getDefaultReportTemplates();
+
+export const MockSeasonCalendar: ComplaintSeasonCalendarItem[] = getDefaultSeasonCalendar();
+
+export const MockComplaintReports: ComplaintReport[] = [
+  (() => {
+    const periodStart = '2026-08-01';
+    const periodEnd = '2026-08-31';
+    const scopeName = '全省';
+    const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
+    // V1.3：AI 归因结论（规则计算块已在上文展示数据，此处仅做综合研判结论）
+    const topMerchant = snapshot.respondentClusters[0];
+    const topRegionCat = snapshot.regionCategoryClusters[0];
+    const aiInsight = `<p style="margin:0 0 8px">综合上述规则分析，本期投诉态势<b style="color:#d4380d">需重点关注</b>。核心风险集中在"${topMerchant?.name || '上述商家'}"（${topMerchant?.count || 0}次重复投诉），呈现"同一主体反复违规"特征，疑为内部管理失效而非个案。${topRegionCat ? `${topRegionCat.region}${topRegionCat.categoryLabel}领域同类投诉集聚（${topRegionCat.count}件），反映该区域该业态存在共性问题。` : ''}</p>`;
+    return {
+      id: 'RPT-20260824-0001',
+      title: '2026年8月 投诉月报（贵州省）',
+      reportType: 'low_season_month' as const,
+      periodStart,
+      periodEnd,
+      scopeLevel: 'province' as const,
+      scopeName,
+      generatedBy: '系统',
+      generatedAt: '2026-08-24 10:05:00',
+      summary: buildReportSummary(snapshot, 'low_season_month', scopeName),
+      hasAiInsight: true,
+      aiInsight,
+      status: snapshot.total === 0 ? 'empty' : 'normal',
+      templateId: 'TPL-LSM-001',
+      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.low_season_month)),
+      snapshot,
+      trigger: 'scheduled' as const,
+    };
+  })(),
+  (() => {
+    const periodStart = '2026-08-15';
+    const periodEnd = '2026-08-21';
+    const scopeName = '贵阳市';
+    const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
+    const topMerchant = snapshot.respondentClusters[0];
+    const aiInsight = `<p style="margin:0">本周风险研判结论：贵阳市投诉${snapshot.total}件，${topMerchant ? `"${topMerchant.name}"连续${topMerchant.count}次被投诉，` : ''}环比${snapshot.momRate >= 0 ? '上升' : '下降'}${Math.abs(snapshot.momRate).toFixed(1)}%。${topMerchant ? '该商家近 30 天投诉呈集聚态势，存在违规惯性，建议升级为橙色风险并启动约谈+限期整改。' : ''}</p>`;
+    return {
+      id: 'RPT-20260824-0002',
+      title: '2026年8月第3周 投诉周报（贵阳市）',
+      reportType: 'peak_week' as const,
+      periodStart,
+      periodEnd,
+      scopeLevel: 'city' as const,
+      scopeName,
+      generatedBy: '系统',
+      generatedAt: '2026-08-22 10:00:00',
+      summary: buildReportSummary(snapshot, 'peak_week', scopeName),
+      hasAiInsight: true,
+      aiInsight,
+      status: snapshot.total === 0 ? 'empty' : 'normal',
+      templateId: 'TPL-PW-001',
+      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.peak_week)),
+      snapshot,
+      trigger: 'scheduled' as const,
+    };
+  })(),
+  (() => {
+    const periodStart = '2026-08-01';
+    const periodEnd = '2026-08-01';
+    const scopeName = '全省';
+    const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
+    const topMerchant = snapshot.respondentClusters[0];
+    const aiInsight = `<p style="margin:0">当日研判结论：受理${snapshot.total}件，${topMerchant ? `"${topMerchant.name}"为重点跟踪对象，` : ''}${snapshot.pending > 0 ? `${snapshot.pending}件待办需24小时内响应。` : '处置进度正常。'}建议次日重点复查高风险商家整改落实情况。</p>`;
+    return {
+      id: 'RPT-20260824-0003',
+      title: '2026-08-01 投诉日报（贵州省·紧急日报）',
+      reportType: 'important_day' as const,
+      periodStart,
+      periodEnd,
+      scopeLevel: 'province' as const,
+      scopeName,
+      generatedBy: '管理员',
+      generatedAt: '2026-08-01 18:30:00',
+      summary: buildReportSummary(snapshot, 'important_day', scopeName),
+      hasAiInsight: true,
+      aiInsight,
+      status: snapshot.total === 0 ? 'empty' : 'normal',
+      templateId: 'TPL-ID-001',
+      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.important_day)),
+      snapshot,
+      trigger: 'manual' as const,
+    };
+  })(),
+];
+
+export const MockComplaintReportArchiveLogs: ComplaintReportArchiveLog[] = [
+  { archiveLogId: 'cral-1', reportId: 'RPT-20260824-0001', action: 'generate', operator: '系统', operatorLevel: 'province', operatedAt: '2026-08-24 10:05:00', detail: '定时任务自动生成（淡季月报模板）' },
+  { archiveLogId: 'cral-2', reportId: 'RPT-20260824-0001', action: 'preview', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-24 10:30:00', detail: '在线预览' },
+  { archiveLogId: 'cral-3', reportId: 'RPT-20260824-0001', action: 'export', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-24 11:20:00', detail: '导出 Word' },
+  { archiveLogId: 'cral-4', reportId: 'RPT-20260824-0002', action: 'generate', operator: '系统', operatorLevel: 'city', operatedAt: '2026-08-22 10:00:00', detail: '定时任务自动生成（旺季周报模板）' },
+  { archiveLogId: 'cral-5', reportId: 'RPT-20260824-0003', action: 'generate', operator: '管理员', operatorLevel: 'province', operatedAt: '2026-08-01 18:30:00', detail: '手动生成紧急日报' },
 ];

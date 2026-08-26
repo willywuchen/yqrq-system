@@ -14,14 +14,12 @@ import {
   Tabs,
   App,
   Tooltip,
-  Empty,
   Typography,
 } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  WarningOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -56,7 +54,6 @@ export default function WarningCenter() {
     deleteWarningRule,
     handleWarning,
     currentUser,
-    publicOpinions,
   } = useStore()
   const [ruleForm] = Form.useForm()
   const [handleForm] = Form.useForm()

@@ -18,7 +18,6 @@ import {
   EyeOutlined,
   DownloadOutlined,
   DeleteOutlined,
-  FileTextOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
@@ -44,8 +43,8 @@ export default function OpinionReportList() {
     try {
       const values = await form.validateFields()
       const type: ReportType = values.type
-      const end = values.periodEnd instanceof dayjs.Dayjs ? values.periodEnd : dayjs(values.periodEnd)
-      const start = values.periodStart instanceof dayjs.Dayjs ? values.periodStart : dayjs(values.periodStart)
+      const end = dayjs.isDayjs(values.periodEnd) ? values.periodEnd : dayjs(values.periodEnd)
+      const start = dayjs.isDayjs(values.periodStart) ? values.periodStart : dayjs(values.periodStart)
       const startStr = start.format('YYYY-MM-DD 00:00:00')
       const endStr = end.format('YYYY-MM-DD 23:59:59')
 

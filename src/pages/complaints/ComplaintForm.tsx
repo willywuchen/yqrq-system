@@ -13,7 +13,6 @@ import {
   App,
   Row,
   Col,
-  Switch,
   type UploadFile,
 } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
@@ -31,7 +30,7 @@ import {
   ComplaintStatusLabels,
   type ReplyStatus,
   ReplyStatusLabels,
-  GUIZHOU_CITIES,
+  GUIZHOU_REGION_OPTIONS,
   type Attachment,
 } from '../../types'
 import { nowStr } from '../../utils'
@@ -42,15 +41,6 @@ interface Props {
   mode: 'new' | 'edit'
 }
 
-// 市州级联选项：贵州省 > 各市州
-const cityOptions = [
-  {
-    value: '贵州省',
-    label: '贵州省',
-    children: GUIZHOU_CITIES.map((c) => ({ value: c, label: c })),
-  },
-]
-
 export default function ComplaintForm({ mode }: Props) {
   const navigate = useNavigate()
   const params = useParams()
@@ -60,8 +50,6 @@ export default function ComplaintForm({ mode }: Props) {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [submitting, setSubmitting] = useState(false)
 
-  const isTransferredToCase = Form.useWatch('isTransferredToCase', form)
-
   const editingId = mode === 'edit' ? params.id : undefined
   const editingComplaint = editingId ? complaints.find((c) => c.id === editingId) : undefined
 
@@ -69,9 +57,9 @@ export default function ComplaintForm({ mode }: Props) {
     if (editingComplaint) {
       form.setFieldsValue({
         title: editingComplaint.title,
-        province: editingComplaint.province,
-        city: [editingComplaint.province, editingComplaint.city],
-        district: editingComplaint.district,
+        region: [editingComplaint.province, editingComplaint.city, editingComplaint.district].filter(
+          Boolean,
+        ),
         complaintMethod: editingComplaint.complaintMethod,
         tourismCategory: editingComplaint.tourismCategory,
         complaintTime: editingComplaint.complaintTime
@@ -93,8 +81,6 @@ export default function ComplaintForm({ mode }: Props) {
         requests: editingComplaint.requests,
         handlerOpinion: editingComplaint.handlerOpinion,
         reviewerOpinion: editingComplaint.reviewerOpinion,
-        isTransferredToCase: editingComplaint.isTransferredToCase || false,
-        suspectedIssue: editingComplaint.suspectedIssue,
         replyStatus: editingComplaint.replyStatus,
         replyTime: editingComplaint.replyTime ? dayjs(editingComplaint.replyTime) : undefined,
         replyContent: editingComplaint.replyContent,
@@ -103,11 +89,9 @@ export default function ComplaintForm({ mode }: Props) {
       setAttachments(editingComplaint.attachments || [])
     } else {
       form.setFieldsValue({
-        province: '贵州省',
-        city: ['贵州省'],
+        region: ['贵州省'],
         status: 'pending',
         replyStatus: 'none',
-        isTransferredToCase: false,
       })
     }
   }, [editingComplaint, form])
@@ -129,17 +113,18 @@ export default function ComplaintForm({ mode }: Props) {
         setSubmitting(true)
         const now = nowStr()
 
-        // 从级联选择器中提取省市
-        const cityValue = values.city as string[]
-        const province = cityValue?.[0] || '贵州省'
-        const city = cityValue?.[1] || ''
+        // 从区域级联选择器中提取省、市州、区县（各级均可只选到任意一级）
+        const regionValue = (values.region as string[]) || []
+        const province = regionValue[0] || '贵州省'
+        const city = regionValue[1] || ''
+        const district = regionValue[2] || undefined
 
         const complaintData: Complaint = {
           id: editingComplaint?.id || generateComplaintId(),
           title: values.title,
-          province: values.province || province,
+          province,
           city,
-          district: values.district,
+          district,
           complaintMethod: values.complaintMethod as ComplaintMethod,
           tourismCategory: values.tourismCategory as TourismCategory,
           complaintTime: values.complaintTime ? values.complaintTime.format('YYYY-MM-DD') : '',
@@ -163,8 +148,9 @@ export default function ComplaintForm({ mode }: Props) {
           requests: values.requests,
           handlerOpinion: values.handlerOpinion,
           reviewerOpinion: values.reviewerOpinion,
-          isTransferredToCase: values.isTransferredToCase,
-          suspectedIssue: values.isTransferredToCase ? values.suspectedIssue : undefined,
+          // 表单已不再维护"是否转案件"，保留原记录值避免编辑时丢失历史数据
+          isTransferredToCase: editingComplaint?.isTransferredToCase || false,
+          suspectedIssue: editingComplaint?.suspectedIssue,
           replyStatus: values.replyStatus as ReplyStatus,
           replyTime: values.replyTime ? values.replyTime.format('YYYY-MM-DD') : undefined,
           replyContent: values.replyContent,
@@ -249,34 +235,16 @@ export default function ComplaintForm({ mode }: Props) {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item name="province" label="所属省份" rules={[{ required: true }]}>
-                  <Select disabled>
-                    <Select.Option value="贵州省">贵州省</Select.Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={24}>
-              <Col span={12}>
                 <Form.Item
-                  name="city"
-                  label="所属市州"
-                  rules={[
-                    { required: true, message: '请选择市州' },
-                    {
-                      validator: (_, value) =>
-                        value && value.length >= 2 && value[1]
-                          ? Promise.resolve()
-                          : Promise.reject(new Error('请选择市州')),
-                    },
-                  ]}
+                  name="region"
+                  label="区域"
+                  rules={[{ required: true, message: '请选择区域' }]}
                 >
-                  <Cascader options={cityOptions} placeholder="请选择市州" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="district" label="区/县">
-                  <Input placeholder="请输入区/县" />
+                  <Cascader
+                    options={GUIZHOU_REGION_OPTIONS}
+                    placeholder="请选择区域（省/市州/区县）"
+                    changeOnSelect
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -299,10 +267,10 @@ export default function ComplaintForm({ mode }: Props) {
               <Col span={12}>
                 <Form.Item
                   name="tourismCategory"
-                  label="旅游类别"
-                  rules={[{ required: true, message: '请选择旅游类别' }]}
+                  label="投诉类别"
+                  rules={[{ required: true, message: '请选择投诉类别' }]}
                 >
-                  <Select placeholder="请选择旅游类别">
+                  <Select placeholder="请选择投诉类别">
                     {Object.entries(TourismCategoryLabels).map(([value, label]) => (
                       <Select.Option key={value} value={value}>
                         {label}
@@ -320,17 +288,6 @@ export default function ComplaintForm({ mode }: Props) {
                   rules={[{ required: true, message: '请选择投诉时间' }]}
                 >
                   <DatePicker style={{ width: '100%' }} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="status" label="办理状态">
-                  <Select>
-                    {Object.entries(ComplaintStatusLabels).map(([value, label]) => (
-                      <Select.Option key={value} value={value}>
-                        {label}
-                      </Select.Option>
-                    ))}
-                  </Select>
                 </Form.Item>
               </Col>
             </Row>
@@ -430,24 +387,12 @@ export default function ComplaintForm({ mode }: Props) {
 
           {/* Section 5 - 办理与审核 */}
           <Card title="办理与审核" style={{ marginBottom: 16 }}>
-            <Form.Item name="handlerOpinion" label="办理意见">
-              <TextArea rows={3} placeholder="请输入办理意见" />
+            <Form.Item name="handlerOpinion" label="投诉办理人员意见">
+              <TextArea rows={3} placeholder="请输入投诉办理人员意见" />
             </Form.Item>
-            <Form.Item name="reviewerOpinion" label="审核意见">
-              <TextArea rows={3} placeholder="请输入审核意见" />
+            <Form.Item name="reviewerOpinion" label="负责人审核意见">
+              <TextArea rows={3} placeholder="请输入负责人审核意见" />
             </Form.Item>
-            <Row gutter={24}>
-              <Col span={12}>
-                <Form.Item name="isTransferredToCase" label="是否转案件" valuePropName="checked">
-                  <Switch />
-                </Form.Item>
-              </Col>
-            </Row>
-            {!!isTransferredToCase && (
-              <Form.Item name="suspectedIssue" label="涉嫌问题">
-                <TextArea rows={3} placeholder="请输入涉嫌违法违纪问题" />
-              </Form.Item>
-            )}
           </Card>
 
           {/* Section 6 - 回复情况 */}
@@ -516,6 +461,27 @@ export default function ComplaintForm({ mode }: Props) {
             <Form.Item name="remark" label="备注">
               <TextArea rows={3} placeholder="请输入备注信息" />
             </Form.Item>
+          </Card>
+
+          {/* Section 8 - 办理状态（最后填写） */}
+          <Card title="办理状态" style={{ marginBottom: 16 }}>
+            <Row gutter={24}>
+              <Col span={12}>
+                <Form.Item
+                  name="status"
+                  label="办理状态"
+                  rules={[{ required: true, message: '请选择办理状态' }]}
+                >
+                  <Select placeholder="请选择办理状态">
+                    {Object.entries(ComplaintStatusLabels).map(([value, label]) => (
+                      <Select.Option key={value} value={value}>
+                        {label}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
           </Card>
 
           {/* 底部按钮 */}

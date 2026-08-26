@@ -1,14 +1,23 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
+  App,
+  Button,
   Card,
-  Row,
   Col,
-  Statistic,
-  Tag,
-  Table,
-  Typography,
-  Space,
+  DatePicker,
   Empty,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Table,
+  Tabs,
+  Tag,
+  Tooltip,
+  Typography,
 } from 'antd'
 import ReactECharts from 'echarts-for-react'
 import {
@@ -18,10 +27,17 @@ import {
   AuditOutlined,
   RiseOutlined,
   UserOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+  DownloadOutlined,
+  EyeOutlined,
 } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
-import { formatMoney } from '../../utils'
+import { formatMoney, maskIdNumber, maskPhone } from '../../utils'
+import { type SubsidyApplication, type TouristItem } from '../../types'
 
 const { Text } = Typography
 
@@ -34,6 +50,389 @@ const AGE_BUCKETS = [
   { label: '60岁以上', min: 61, max: 200 },
 ]
 
+// 证件类型标签映射
+const IdTypeLabels: Record<TouristItem['idType'], string> = {
+  id_card: '身份证',
+  passport: '护照',
+  hk_macao_pass: '港澳通行证',
+  tw_pass: '台湾通行证',
+  temp_entry_permit: '临时入境许可证',
+}
+
+// 性别标签映射
+const GenderLabels: Record<NonNullable<TouristItem['gender']>, string> = {
+  male: '男',
+  female: '女',
+  unknown: '未知',
+}
+
+// 扁平化游客行：游客自身字段 + 所属团组上下文
+interface TouristRow extends TouristItem {
+  applicationId: string
+  createdByOrg: string
+  teamName: string
+  dispatchNo: string
+  travelStart: string
+}
+
+// 游客信息查询：查询条件态
+interface TouristQuery {
+  name: string
+  gender?: TouristItem['gender']
+  idType?: TouristItem['idType']
+  idNumber: string
+  birthDateRange?: [string, string]
+  ageMin?: number
+  ageMax?: number
+  nationalities: string[]
+  sourcePlaces: string[]
+  phone: string
+  contractStatus?: string
+  contractNo: string
+  createdByOrgs: string[]
+  teamName: string
+  dispatchNo: string
+  travelStartRange?: [string, string]
+}
+
+const emptyQuery: TouristQuery = {
+  name: '',
+  idNumber: '',
+  nationalities: [],
+  sourcePlaces: [],
+  phone: '',
+  contractNo: '',
+  createdByOrgs: [],
+  teamName: '',
+  dispatchNo: '',
+}
+
+// 游客信息查询面板（Tab2 内容）
+function TouristQueryPanel({ apps }: { apps: SubsidyApplication[] }) {
+  const navigate = useNavigate()
+  const { message } = App.useApp()
+
+  // 扁平化游客列表（含所属团组上下文）
+  const allRows = useMemo<TouristRow[]>(() => {
+    const rows: TouristRow[] = []
+    apps.forEach((a) => {
+      a.teamPresetSnapshot.tourists.forEach((t) => {
+        rows.push({
+          ...t,
+          applicationId: a.id,
+          createdByOrg: a.createdByOrg,
+          teamName: a.teamPresetSnapshot.teamName,
+          dispatchNo: a.teamPresetSnapshot.dispatchNo,
+          travelStart: a.teamPresetSnapshot.travelStart,
+        })
+      })
+    })
+    return rows
+  }, [apps])
+
+  // 下拉选项（从已有数据派生）
+  const nationalityOptions = useMemo(
+    () => Array.from(new Set(allRows.map((r) => r.nationality).filter(Boolean))).sort(),
+    [allRows],
+  )
+  const sourcePlaceOptions = useMemo(
+    () => Array.from(new Set(allRows.map((r) => r.sourcePlace || r.nationality).filter(Boolean))).sort(),
+    [allRows],
+  )
+  const orgOptions = useMemo(
+    () => Array.from(new Set(allRows.map((r) => r.createdByOrg).filter(Boolean))).sort(),
+    [allRows],
+  )
+
+  // 查询条件态：query 为输入态，appliedQuery 为已点击查询后生效的态
+  const [query, setQuery] = useState<TouristQuery>(emptyQuery)
+  const [appliedQuery, setAppliedQuery] = useState<TouristQuery>(emptyQuery)
+
+  const update = <K extends keyof TouristQuery>(key: K, value: TouristQuery[K]) => {
+    setQuery((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const doSearch = () => setAppliedQuery(query)
+  const doReset = () => {
+    setQuery(emptyQuery)
+    setAppliedQuery(emptyQuery)
+  }
+
+  const filtered = useMemo(() => {
+    const q = appliedQuery
+    const includes = (val: string | undefined, kw: string) =>
+      kw ? (val || '').toLowerCase().includes(kw.toLowerCase()) : true
+    return allRows.filter((r) => {
+      if (!includes(r.name, q.name)) return false
+      if (q.gender && r.gender !== q.gender) return false
+      if (q.idType && r.idType !== q.idType) return false
+      if (!includes(r.idNumber, q.idNumber)) return false
+      if (q.birthDateRange) {
+        const [s, e] = q.birthDateRange
+        if (s && (!r.birthDate || r.birthDate < s)) return false
+        if (e && (!r.birthDate || r.birthDate > e)) return false
+      }
+      if (q.ageMin !== undefined && (r.age === undefined || r.age < q.ageMin)) return false
+      if (q.ageMax !== undefined && (r.age === undefined || r.age > q.ageMax)) return false
+      if (q.nationalities.length > 0 && !q.nationalities.includes(r.nationality || '')) return false
+      if (q.sourcePlaces.length > 0 && !q.sourcePlaces.includes(r.sourcePlace || r.nationality || '')) return false
+      if (!includes(r.phone, q.phone)) return false
+      if (q.contractStatus && r.contractStatus !== q.contractStatus) return false
+      if (!includes(r.contractNo, q.contractNo)) return false
+      if (q.createdByOrgs.length > 0 && !q.createdByOrgs.includes(r.createdByOrg)) return false
+      if (!includes(r.teamName, q.teamName)) return false
+      if (!includes(r.dispatchNo, q.dispatchNo)) return false
+      if (q.travelStartRange) {
+        const [s, e] = q.travelStartRange
+        if (s && (!r.travelStart || r.travelStart < s)) return false
+        if (e && (!r.travelStart || r.travelStart > e)) return false
+      }
+      return true
+    })
+  }, [allRows, appliedQuery])
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      message.warning('无可导出的数据')
+      return
+    }
+    const headers = [
+      '姓名', '性别', '证件类型', '证件号码', '出生日期', '年龄', '国籍/地区', '客源地',
+      '手机号', '合同状态', '合同编号', '所属旅行社', '团组名称', '团组编号', '出团日期',
+    ]
+    const rows = filtered.map((r) => [
+      r.name,
+      r.gender ? GenderLabels[r.gender] : '',
+      IdTypeLabels[r.idType],
+      maskIdNumber(r.idNumber),
+      r.birthDate || '',
+      r.age ?? '',
+      r.nationality || '',
+      r.sourcePlace || r.nationality || '',
+      maskPhone(r.phone),
+      r.contractStatus || '',
+      r.contractNo || '',
+      r.createdByOrg,
+      r.teamName,
+      r.dispatchNo,
+      r.travelStart,
+    ])
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `游客信息明细_${dayjs().format('YYYYMMDD_HHmmss')}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    message.success(`已导出 ${filtered.length} 条游客记录`)
+  }
+
+  const columns = useMemo(() => [
+    { title: '姓名', dataIndex: 'name', width: 100, fixed: 'left' as const },
+    {
+      title: '性别',
+      dataIndex: 'gender',
+      width: 70,
+      render: (v?: TouristItem['gender']) => (v ? GenderLabels[v] : '-'),
+    },
+    {
+      title: '证件类型',
+      dataIndex: 'idType',
+      width: 130,
+      render: (v: TouristItem['idType']) => IdTypeLabels[v],
+    },
+    { title: '证件号码', dataIndex: 'idNumber', width: 150, render: (v: string) => maskIdNumber(v) || '-' },
+    { title: '出生日期', dataIndex: 'birthDate', width: 110, render: (v?: string) => v || '-' },
+    { title: '年龄', dataIndex: 'age', width: 60, render: (v?: number) => (v ?? '-') },
+    { title: '国籍/地区', dataIndex: 'nationality', width: 100, render: (v?: string) => v || '-' },
+    {
+      title: '客源地',
+      key: 'sourcePlace',
+      width: 100,
+      render: (_: unknown, r: TouristRow) => r.sourcePlace || r.nationality || '-',
+    },
+    { title: '手机号', dataIndex: 'phone', width: 120, render: (v?: string) => (v ? maskPhone(v) : '-') },
+    {
+      title: '合同状态',
+      dataIndex: 'contractStatus',
+      width: 90,
+      render: (v?: string) => (v ? <Tag color="blue" style={{ margin: 0 }}>{v}</Tag> : '-'),
+    },
+    { title: '合同编号', dataIndex: 'contractNo', width: 150, render: (v?: string) => v || '-' },
+    { title: '所属旅行社', dataIndex: 'createdByOrg', width: 180 },
+    { title: '团组名称', dataIndex: 'teamName', width: 160 },
+    { title: '团组编号', dataIndex: 'dispatchNo', width: 130 },
+    { title: '出团日期', dataIndex: 'travelStart', width: 110 },
+    {
+      title: '操作',
+      key: 'op',
+      width: 90,
+      fixed: 'right' as const,
+      render: (_: unknown, r: TouristRow) => (
+        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/subsidy/${r.applicationId}`)}>
+          查看
+        </Button>
+      ),
+    },
+  ], [navigate])
+
+  return (
+    <div>
+      {/* 查询条件 */}
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Form layout="vertical">
+          <Row gutter={16}>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="姓名">
+                <Input value={query.name} placeholder="模糊匹配" allowClear onChange={(e) => update('name', e.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="性别">
+                <Select
+                  value={query.gender}
+                  placeholder="选择性别"
+                  allowClear
+                  onChange={(v) => update('gender', v)}
+                  options={[{ label: '男', value: 'male' }, { label: '女', value: 'female' }, { label: '未知', value: 'unknown' }]}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="证件类型">
+                <Select
+                  value={query.idType}
+                  placeholder="选择证件类型"
+                  allowClear
+                  onChange={(v) => update('idType', v)}
+                  options={Object.entries(IdTypeLabels).map(([value, label]) => ({ value, label }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="证件号码">
+                <Input value={query.idNumber} placeholder="模糊匹配" allowClear onChange={(e) => update('idNumber', e.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="出生日期">
+                <DatePicker.RangePicker
+                  style={{ width: '100%' }}
+                  value={query.birthDateRange ? [query.birthDateRange[0] ? dayjs(query.birthDateRange[0]) : null, query.birthDateRange[1] ? dayjs(query.birthDateRange[1]) : null] : null}
+                  onChange={(_, ds) => update('birthDateRange', ds[0] || ds[1] ? ([ds[0], ds[1]] as [string, string]) : undefined)}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="年龄范围">
+                <Space>
+                  <InputNumber min={0} max={150} placeholder="最小" style={{ width: 90 }} value={query.ageMin} onChange={(v) => update('ageMin', v ?? undefined)} />
+                  <span>~</span>
+                  <InputNumber min={0} max={150} placeholder="最大" style={{ width: 90 }} value={query.ageMax} onChange={(v) => update('ageMax', v ?? undefined)} />
+                </Space>
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="国籍/地区">
+                <Select mode="multiple" placeholder="可多选" allowClear maxTagCount="responsive" value={query.nationalities} onChange={(v) => update('nationalities', v)} options={nationalityOptions.map((v) => ({ value: v, label: v }))} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="客源地">
+                <Select mode="multiple" placeholder="可多选" allowClear maxTagCount="responsive" value={query.sourcePlaces} onChange={(v) => update('sourcePlaces', v)} options={sourcePlaceOptions.map((v) => ({ value: v, label: v }))} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="手机号">
+                <Input value={query.phone} placeholder="模糊匹配" allowClear onChange={(e) => update('phone', e.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="合同状态">
+                <Select
+                  value={query.contractStatus}
+                  placeholder="选择合同状态"
+                  allowClear
+                  onChange={(v) => update('contractStatus', v || undefined)}
+                  options={[{ label: '已签订', value: '已签订' }, { label: '未签订', value: '未签订' }, { label: '履约中', value: '履约中' }, { label: '已解除', value: '已解除' }]}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="合同编号">
+                <Input value={query.contractNo} placeholder="模糊匹配" allowClear onChange={(e) => update('contractNo', e.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="所属旅行社">
+                <Select mode="multiple" placeholder="可多选" allowClear maxTagCount="responsive" value={query.createdByOrgs} onChange={(v) => update('createdByOrgs', v)} options={orgOptions.map((v) => ({ value: v, label: v }))} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="团组名称">
+                <Input value={query.teamName} placeholder="模糊匹配" allowClear onChange={(e) => update('teamName', e.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="团组编号">
+                <Input value={query.dispatchNo} placeholder="模糊匹配" allowClear onChange={(e) => update('dispatchNo', e.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Form.Item label="出团日期">
+                <DatePicker.RangePicker
+                  style={{ width: '100%' }}
+                  value={query.travelStartRange ? [query.travelStartRange[0] ? dayjs(query.travelStartRange[0]) : null, query.travelStartRange[1] ? dayjs(query.travelStartRange[1]) : null] : null}
+                  onChange={(_, ds) => update('travelStartRange', ds[0] || ds[1] ? ([ds[0], ds[1]] as [string, string]) : undefined)}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row justify="end">
+            <Space>
+              <Button icon={<ReloadOutlined />} onClick={doReset}>重置</Button>
+              <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
+              <Button type="primary" icon={<SearchOutlined />} onClick={doSearch}>查询</Button>
+            </Space>
+          </Row>
+        </Form>
+      </Card>
+
+      {/* 结果列表 */}
+      <Card
+        size="small"
+        title={
+          <Space>
+            <UserOutlined style={{ color: '#1677ff' }} />
+            <span>游客明细列表</span>
+            <Tag color="blue">共 {filtered.length} 人</Tag>
+          </Space>
+        }
+      >
+        <Table
+          rowKey={(r) => `${r.applicationId}-${r.key}`}
+          dataSource={filtered}
+          columns={columns}
+          size="small"
+          scroll={{ x: 1900 }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            showTotal: (t) => `共 ${t} 人`,
+          }}
+          locale={{ emptyText: '暂无游客数据' }}
+        />
+      </Card>
+    </div>
+  )
+}
+
 export default function SubsidyStatistics() {
   const { subsidyApplications } = useStore()
 
@@ -44,16 +443,24 @@ export default function SubsidyStatistics() {
   )
 
   // 1. 总览
+  // 入境游客统计口径：
+  // 总人次 = 各申报游客名单记录数累计（同一游客多次随团入黔重复计数）
+  // 总数 = 按证件号去重后的游客人数（同一游客只计一次），因此总数 ≤ 总人次
   const totals = useMemo(() => {
     const totalApps = visibleApps.length
     const totalAmount = visibleApps.reduce((s, a) => s + (a.totalAmount || 0), 0)
-    const totalTeamSize = visibleApps.reduce((s, a) => s + (a.totalTeamSize || 0), 0)
-    const totalInbound = visibleApps.reduce(
-      (s, a) => s + (a.teamPresetSnapshot.inboundTourists || 0),
-      0,
-    )
+    const seenIds = new Set<string>()
+    let inboundPersonTimes = 0
+    visibleApps.forEach((a) => {
+      const tourists = a.teamPresetSnapshot.tourists || []
+      inboundPersonTimes += tourists.length
+      tourists.forEach((t) => {
+        const key = t.idNumber || (t.name ? `${t.name}|${t.nationality || ''}` : '')
+        if (key) seenIds.add(key)
+      })
+    })
     const orgCount = new Set(visibleApps.map((a) => a.createdByOrg)).size
-    return { totalApps, totalAmount, totalTeamSize, totalInbound, orgCount }
+    return { totalApps, totalAmount, inboundPersons: seenIds.size, inboundPersonTimes, orgCount }
   }, [visibleApps])
 
   // 2. 按旅行社统计
@@ -327,6 +734,13 @@ export default function SubsidyStatistics() {
             <Empty description="暂无可统计的已提交申报记录" />
           </Card>
         ) : (
+          <Tabs
+            defaultActiveKey="overview"
+            items={[
+              {
+                key: 'overview',
+                label: '统计概览',
+                children: (
           <>
             {/* 顶部指标 */}
             <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -366,9 +780,13 @@ export default function SubsidyStatistics() {
               <Col flex={1}>
                 <Card>
                   <Statistic
-                    title="游客总数"
-                    value={totals.totalTeamSize}
-                    suffix="人次"
+                    title={(
+                      <Tooltip title="按证件号去重统计的实际入境游客人数（同一游客多次入黔只计一次）">
+                        <span>入境游客总数</span>
+                      </Tooltip>
+                    )}
+                    value={totals.inboundPersons}
+                    suffix="人"
                     prefix={<GlobalOutlined />}
                     valueStyle={{ color: '#13c2c2' }}
                   />
@@ -377,8 +795,12 @@ export default function SubsidyStatistics() {
               <Col flex={1}>
                 <Card>
                   <Statistic
-                    title="入境游客数"
-                    value={totals.totalInbound}
+                    title={(
+                      <Tooltip title="各申报团组游客名单的累计入境人次（同一游客多次随团入黔重复计数）">
+                        <span>入境游客总人次</span>
+                      </Tooltip>
+                    )}
+                    value={totals.inboundPersonTimes}
                     suffix="人次"
                     prefix={<RiseOutlined />}
                     valueStyle={{ color: '#eb2f96' }}
@@ -549,6 +971,20 @@ export default function SubsidyStatistics() {
             </Card>
 
           </>
+                ),
+              },
+              {
+                key: 'tourist',
+                label: (
+                  <Space>
+                    <UserOutlined style={{ color: '#1677ff' }} />
+                    <span>游客信息查询</span>
+                  </Space>
+                ),
+                children: <TouristQueryPanel apps={visibleApps} />,
+              },
+            ]}
+          />
         )}
       </PageContainer>
     </>

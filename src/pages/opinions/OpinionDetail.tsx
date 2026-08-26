@@ -25,6 +25,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
+import { isRichTextHtml, richTextToPlain } from '../../components/RichTextEditor'
 import { useStore } from '../../store'
 import {
   OpinionDataSourceLabels,
@@ -39,7 +40,6 @@ import {
   TourismCategoryLabels,
   type OpinionHandleStatus,
   type OpinionHandleLog,
-  type PublicOpinion,
 } from '../../types'
 import { genId, nowStr } from '../../utils'
 
@@ -60,7 +60,7 @@ const logActionColors: Record<string, string> = {
 export default function OpinionDetail() {
   const navigate = useNavigate()
   const params = useParams()
-  const { modal, message } = App.useApp()
+  const { message } = App.useApp()
   const {
     publicOpinions,
     setOpinionStatus,
@@ -147,13 +147,13 @@ export default function OpinionDetail() {
 数据来源：${OpinionDataSourceLabels[opinion.dataSource]}
 旅游类别：${TourismCategoryLabels[opinion.tourismCategory]}
 情感倾向：${OpinionSentimentLabels[opinion.sentiment]}
-风险等级：${OpinionRiskLevelLabels[opinion.riskLevel]}（指数：${opinion.riskScore ?? '-'}）
+风险等级：${OpinionRiskLevelLabels[opinion.riskLevel]}
 处置状态：${OpinionHandleStatusLabels[opinion.handleStatus]}
 涉及主体：${(opinion.involvedSubjects || []).join('、') || '-'}
 备注：${opinion.remark || '-'}
 
 【舆情正文】
-${opinion.content}
+${richTextToPlain(opinion.content)}
 
 【处置日志】
 ${opinion.handleLogs.map((l) => `[${l.time}] ${l.operator} ${OpinionActionLabels[l.action]}：${l.opinion}`).join('\n')}
@@ -296,7 +296,7 @@ ${opinion.handleLogs.map((l) => `[${l.time}] ${l.operator} ${OpinionActionLabels
             </Descriptions.Item>
             <Descriptions.Item label="风险等级">
               <Tag color={OpinionRiskLevelColors[opinion.riskLevel]}>
-                {OpinionRiskLevelLabels[opinion.riskLevel]}（指数 {opinion.riskScore ?? '-'}）
+                {OpinionRiskLevelLabels[opinion.riskLevel]}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="涉及主体" span={3}>
@@ -320,11 +320,19 @@ ${opinion.handleLogs.map((l) => `[${l.time}] ${l.operator} ${OpinionActionLabels
           </Descriptions>
         </Card>
 
-        {/* 舆情正文 */}
+        {/* 舆情正文：富文本（图文）渲染，历史纯文本数据按段落展示 */}
         <Card title="舆情正文" size="small" style={{ marginBottom: 16 }}>
-          <Paragraph style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
-            {opinion.content}
-          </Paragraph>
+          {isRichTextHtml(opinion.content) ? (
+            <div
+              className="rich-text-content"
+              style={{ lineHeight: 1.9, fontSize: 14 }}
+              dangerouslySetInnerHTML={{ __html: opinion.content }}
+            />
+          ) : (
+            <Paragraph style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+              {opinion.content}
+            </Paragraph>
+          )}
           {opinion.remark && (
             <>
               <Divider style={{ margin: '12px 0' }} />

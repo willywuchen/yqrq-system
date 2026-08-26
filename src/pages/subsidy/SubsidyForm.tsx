@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
@@ -10,6 +10,7 @@ import {
   Input,
   InputNumber,
   Row,
+  Select,
   Space,
   Table,
   Tag,
@@ -34,14 +35,16 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
+import MaskedInput from '../../components/MaskedInput'
 import { useStore } from '../../store'
 import {
   SubsidyStatusColors,
   SubsidyStatusLabels,
   type SubsidyApplication,
   type SubsidyOperationLog,
+  type TouristItem,
 } from '../../types'
-import { formatMoney, nowStr } from '../../utils'
+import { formatMoney, maskIdNumber, maskPhone, nowStr } from '../../utils'
 
 const { Text } = Typography
 
@@ -71,6 +74,13 @@ function useCountdown(lockDeadline: string, status: string) {
   if (days >= 1) return { text: `${days}天${hours}小时`, color: 'default' }
   if (hours >= 1) return { text: `${hours}小时${minutes}分`, color: 'orange' }
   return { text: `${minutes}分钟`, color: 'red' }
+}
+
+// 酒店星级格式：X星级或同等档次（X 为填写项，“星级或同等档次”为固定后缀）
+const HOTEL_STAR_SUFFIX = '星级或同等档次'
+const parseHotelStarX = (star: string): number | null => {
+  const m = (star || '').match(/^(\d+(?:\.\d+)?)星级或同等档次$/)
+  return m ? Number(m[1]) : null
 }
 
 // 酒店行项
@@ -238,6 +248,52 @@ export default function SubsidyForm() {
     })
   }
 
+  // 游客信息行编辑（来源：团信息快照，可编辑补充合同等字段）
+  const updateTourist = useCallback((touristKey: string, field: keyof TouristItem, value: any) => {
+    setFormValues((prev) => {
+      if (!prev) return prev
+      const tourists = prev.teamPresetSnapshot.tourists.map((t) =>
+        t.key === touristKey ? { ...t, [field]: value } : t,
+      )
+      return { ...prev, teamPresetSnapshot: { ...prev.teamPresetSnapshot, tourists } }
+    })
+  }, [])
+
+  const addTourist = () => {
+    setFormValues((prev) => {
+      if (!prev) return prev
+      // 取现存 contractNo 中最大数字后缀 +1，避免删除后再新增产生重复编号
+      const maxNo = prev.teamPresetSnapshot.tourists.reduce((m, t) => {
+        const n = Number((t.contractNo || '').match(/C(\d+)$/)?.[1])
+        return Number.isFinite(n) && n > m ? n : m
+      }, 0)
+      const newTourist: TouristItem = {
+        key: `t-new-${Date.now()}`,
+        name: '',
+        idType: 'passport',
+        idNumber: '',
+        nationality: '',
+        sourcePlace: '',
+        gender: 'unknown',
+        contractStatus: '已签订',
+        contractNo: `${prev.teamPresetSnapshot.dispatchNo}-C${maxNo + 1}`,
+      }
+      return {
+        ...prev,
+        teamPresetSnapshot: { ...prev.teamPresetSnapshot, tourists: [...prev.teamPresetSnapshot.tourists, newTourist] },
+      }
+    })
+  }
+
+  const removeTourist = useCallback((touristKey: string) => {
+    setFormValues((prev) => {
+      if (!prev) return prev
+      const tourists = prev.teamPresetSnapshot.tourists.filter((t) => t.key !== touristKey)
+      return { ...prev, teamPresetSnapshot: { ...prev.teamPresetSnapshot, tourists } }
+    })
+  }, [])
+
+
   // 保存
   const handleSave = () => {
     if (!canEdit) {
@@ -285,8 +341,8 @@ export default function SubsidyForm() {
       icon: <SendOutlined />,
       content: (
         <div>
-          <p>提交后省文旅厅终审员将可查看本申报记录。</p>
-          <p>出团前一日 24:00 前仍可修改（剩余：<b>{countdown.text}</b>）。</p>
+          <p>提交后省文旅厅将可查看本申报记录。</p>
+          <p>行程结束日 24:00 前仍可修改（行程结束当日仍可修改，剩余：<b>{countdown.text}</b>）。</p>
           <p>申请奖励合计：<b style={{ color: '#cf1322' }}>{formatMoney(totalAmount)}</b></p>
         </div>
       ),
@@ -326,7 +382,7 @@ export default function SubsidyForm() {
     modal.confirm({
       title: '确认撤回申报',
       icon: <UndoOutlined />,
-      content: '撤回后将回到草稿状态，省文旅厅终审员将不可见。可在锁定时间前重新提交。',
+      content: '撤回后将回到草稿状态，省文旅厅将不可见。可在锁定时间前重新提交。',
       okText: '确认撤回',
       okType: 'danger',
       cancelText: '取消',
@@ -406,7 +462,7 @@ export default function SubsidyForm() {
 
   // 表格列
   const receptionColumns = [
-    { title: '申请项目', dataIndex: 'project', width: 240 },
+    { title: '申请项目', dataIndex: 'project', width: 300 },
     {
       title: '申请奖励金额（元）',
       dataIndex: 'amount',
@@ -526,13 +582,18 @@ export default function SubsidyForm() {
     {
       title: '酒店星级',
       dataIndex: 'hotelStar',
-      width: 160,
+      width: 260,
       render: (_: unknown, r: HotelRow) => (
-        <Input
-          value={r.hotelStar}
+        <InputNumber
+          value={parseHotelStarX(r.hotelStar)}
+          min={1}
+          max={5}
+          precision={0}
           disabled={!canEdit}
-          placeholder="如：五星级 / 四星级"
-          onChange={(e) => updateHotelRow(r.key, 'hotelStar', e.target.value)}
+          placeholder="如：5"
+          style={{ width: '100%' }}
+          addonAfter={HOTEL_STAR_SUFFIX}
+          onChange={(v) => updateHotelRow(r.key, 'hotelStar', v ? `${v}${HOTEL_STAR_SUFFIX}` : '')}
         />
       ),
     },
@@ -548,6 +609,165 @@ export default function SubsidyForm() {
         ) : null,
     },
   ]
+
+  // 游客信息列（9个字段）
+  const touristColumns = useMemo(() => [
+    {
+      title: '姓名',
+      dataIndex: 'name',
+      width: 120,
+      render: (_: unknown, r: TouristItem) => (
+        <Input
+          value={r.name}
+          disabled={!canEdit}
+          placeholder="姓名"
+          onChange={(e) => updateTourist(r.key, 'name', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '性别',
+      dataIndex: 'gender',
+      width: 110,
+      render: (_: unknown, r: TouristItem) => (
+        <Select
+          value={r.gender}
+          disabled={!canEdit}
+          style={{ width: '100%' }}
+          allowClear
+          placeholder="性别"
+          options={[
+            { label: '男', value: 'male' },
+            { label: '女', value: 'female' },
+            { label: '未知', value: 'unknown' },
+          ]}
+          onChange={(v) => updateTourist(r.key, 'gender', v || 'unknown')}
+        />
+      ),
+    },
+    {
+      title: '证件类型',
+      dataIndex: 'idType',
+      width: 150,
+      render: (_: unknown, r: TouristItem) => (
+        <Select
+          value={r.idType}
+          disabled={!canEdit}
+          style={{ width: '100%' }}
+          placeholder="证件类型"
+          options={[
+            { label: '身份证', value: 'id_card' },
+            { label: '护照', value: 'passport' },
+            { label: '港澳通行证', value: 'hk_macao_pass' },
+            { label: '台湾通行证', value: 'tw_pass' },
+            { label: '临时入境许可证', value: 'temp_entry_permit' },
+          ]}
+          onChange={(v) => updateTourist(r.key, 'idType', v || 'passport')}
+        />
+      ),
+    },
+    {
+      title: '证件号码',
+      dataIndex: 'idNumber',
+      width: 160,
+      render: (_: unknown, r: TouristItem) => (
+        <MaskedInput
+          value={r.idNumber}
+          mask={maskIdNumber}
+          disabled={!canEdit}
+          placeholder="证件号码"
+          onChange={(v) => updateTourist(r.key, 'idNumber', v)}
+        />
+      ),
+    },
+    {
+      title: '出生日期',
+      dataIndex: 'birthDate',
+      width: 160,
+      render: (_: unknown, r: TouristItem) => (
+        <DatePicker
+          value={r.birthDate ? dayjs(r.birthDate) : null}
+          disabled={!canEdit}
+          style={{ width: '100%' }}
+          placeholder="出生日期"
+          onChange={(_, s) => updateTourist(r.key, 'birthDate', s as string)}
+        />
+      ),
+    },
+    {
+      title: '手机号',
+      dataIndex: 'phone',
+      width: 140,
+      render: (_: unknown, r: TouristItem) => (
+        <MaskedInput
+          value={r.phone || ''}
+          mask={maskPhone}
+          disabled={!canEdit}
+          placeholder="手机号"
+          onChange={(v) => updateTourist(r.key, 'phone', v)}
+        />
+      ),
+    },
+    {
+      title: '合同状态',
+      dataIndex: 'contractStatus',
+      width: 120,
+      render: (_: unknown, r: TouristItem) => (
+        <Select
+          value={r.contractStatus}
+          disabled={!canEdit}
+          style={{ width: '100%' }}
+          allowClear
+          placeholder="合同状态"
+          options={[
+            { label: '已签订', value: '已签订' },
+            { label: '未签订', value: '未签订' },
+            { label: '履约中', value: '履约中' },
+            { label: '已解除', value: '已解除' },
+          ]}
+          onChange={(v) => updateTourist(r.key, 'contractStatus', v || '')}
+        />
+      ),
+    },
+    {
+      title: '合同编号',
+      dataIndex: 'contractNo',
+      width: 160,
+      render: (_: unknown, r: TouristItem) => (
+        <Input
+          value={r.contractNo || ''}
+          disabled={!canEdit}
+          placeholder="合同编号"
+          onChange={(e) => updateTourist(r.key, 'contractNo', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '客源地',
+      dataIndex: 'sourcePlace',
+      width: 140,
+      render: (_: unknown, r: TouristItem) => (
+        <Input
+          value={r.sourcePlace || ''}
+          disabled={!canEdit}
+          placeholder={r.nationality ? `同国籍（${r.nationality}）` : '客源地'}
+          onChange={(e) => updateTourist(r.key, 'sourcePlace', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'op',
+      width: 80,
+      fixed: 'right' as const,
+      render: (_: unknown, r: TouristItem) =>
+        canEdit ? (
+          <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeTourist(r.key)}>
+            删除
+          </Button>
+        ) : null,
+    },
+  ], [canEdit, updateTourist, removeTourist])
 
   return (
     <>
@@ -581,7 +801,7 @@ export default function SubsidyForm() {
               <Divider type="vertical" />
               <span>锁定时间：{editingApp.lockDeadline}</span>
               <Divider type="vertical" />
-              <Tooltip title="出团前一日 24:00 前可修改">
+              <Tooltip title="行程结束日 24:00 前可修改（行程结束当日仍可修改）">
                 <Tag color={countdown.color} icon={<ClockCircleOutlined />}>
                   剩余可修改：{countdown.text}
                 </Tag>
@@ -854,6 +1074,10 @@ export default function SubsidyForm() {
                             />
                           </Form.Item>
                         </Col>
+                      </Row>
+
+                      {/* 租用客车：辆数与车号同行展示 */}
+                      <Row gutter={16}>
                         <Col span={8}>
                           <Form.Item
                             label={
@@ -896,24 +1120,6 @@ export default function SubsidyForm() {
                             />
                           </Form.Item>
                         </Col>
-                        <Col span={8}>
-                          <Form.Item
-                            label={
-                              <Space>
-                                <span>4A+景区数量</span>
-                                <Tag color="orange" style={{ fontSize: 11 }}>库匹配</Tag>
-                              </Space>
-                            }
-                          >
-                            <InputNumber
-                              value={formValues.teamBaseInfo.scenicCount4APlus}
-                              onChange={(v) => updateTeamBaseInfo('scenicCount4APlus', v || 0)}
-                              disabled={!canEdit}
-                              style={{ width: '100%' }}
-                              addonAfter="个"
-                            />
-                          </Form.Item>
-                        </Col>
                       </Row>
 
                       {/* 住宿酒店：第几晚 / 酒店名称 / 酒店星级（合并编辑） */}
@@ -939,47 +1145,116 @@ export default function SubsidyForm() {
                         locale={{ emptyText: '无住宿信息' }}
                       />
 
-                      {/* 4A景区名称：可编辑 */}
+                      {/* 参观游览情况：4A+景区数量与名称（合并编辑） */}
                       <Divider orientation="left">
                         <Space>
-                          <span>4A+景区名称</span>
+                          <span>参观游览情况（4A+景区）</span>
                           <Tag color="orange" style={{ fontSize: 11 }}>可编辑</Tag>
                         </Space>
                       </Divider>
-                      <div style={{ marginBottom: 8 }}>
-                        {canEdit && (
-                          <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addScenicName}>
-                            添加一个景区
-                          </Button>
-                        )}
-                      </div>
-                      {(formValues.teamBaseInfo.scenicNames4APlus || []).length === 0 ? (
-                        <Text type="secondary">无景区</Text>
-                      ) : (
-                        <Space wrap>
-                          {(formValues.teamBaseInfo.scenicNames4APlus || []).map((name, idx) => (
-                            <Space key={idx} style={{ marginBottom: 8 }}>
-                              <Input
-                                value={name}
-                                disabled={!canEdit}
-                                placeholder="景区名称"
-                                style={{ width: 240 }}
-                                onChange={(e) => updateScenicName(idx, e.target.value)}
-                              />
+                      <Row gutter={16}>
+                        <Col span={8}>
+                          <Form.Item
+                            label={
+                              <Space>
+                                <span>4A+景区数量</span>
+                                <Tag color="orange" style={{ fontSize: 11 }}>库匹配</Tag>
+                              </Space>
+                            }
+                          >
+                            <InputNumber
+                              value={formValues.teamBaseInfo.scenicCount4APlus}
+                              onChange={(v) => updateTeamBaseInfo('scenicCount4APlus', v || 0)}
+                              disabled={!canEdit}
+                              style={{ width: '100%' }}
+                              addonAfter="个"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col span={16}>
+                          <Form.Item
+                            label={
+                              <Space>
+                                <span>4A+景区名称</span>
+                                <Tag color="orange" style={{ fontSize: 11 }}>可编辑</Tag>
+                              </Space>
+                            }
+                          >
+                            <div style={{ marginBottom: 8 }}>
                               {canEdit && (
-                                <Button
-                                  type="link"
-                                  danger
-                                  size="small"
-                                  icon={<DeleteOutlined />}
-                                  onClick={() => removeScenicName(idx)}
-                                />
+                                <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addScenicName}>
+                                  添加一个景区
+                                </Button>
                               )}
-                            </Space>
-                          ))}
-                        </Space>
-                      )}
+                            </div>
+                            {(formValues.teamBaseInfo.scenicNames4APlus || []).length === 0 ? (
+                              <Text type="secondary">无景区</Text>
+                            ) : (
+                              <Space wrap>
+                                {(formValues.teamBaseInfo.scenicNames4APlus || []).map((name, idx) => (
+                                  <Space key={idx} style={{ marginBottom: 8 }}>
+                                    <Input
+                                      value={name}
+                                      disabled={!canEdit}
+                                      placeholder="景区名称"
+                                      style={{ width: 240 }}
+                                      onChange={(e) => updateScenicName(idx, e.target.value)}
+                                    />
+                                    {canEdit && (
+                                      <Button
+                                        type="link"
+                                        danger
+                                        size="small"
+                                        icon={<DeleteOutlined />}
+                                        onClick={() => removeScenicName(idx)}
+                                      />
+                                    )}
+                                  </Space>
+                                ))}
+                              </Space>
+                            )}
+                          </Form.Item>
+                        </Col>
+                      </Row>
                     </Form>
+                  </Card>
+                ),
+              },
+              // 游客信息
+              {
+                key: 'tourists',
+                label: (
+                  <Space>
+                    <span>游客信息</span>
+                    <Tag color="blue" style={{ margin: 0 }}>
+                      {formValues.teamPresetSnapshot.tourists.length}人
+                    </Tag>
+                  </Space>
+                ),
+                children: (
+                  <Card bordered={false}>
+                    <Alert
+                      type="info"
+                      showIcon
+                      message="游客名单来源：团信息快照。可在此补充/修改姓名、性别、证件、出生日期、手机号、合同状态、合同编号、客源地等字段。"
+                      style={{ marginBottom: 16 }}
+                    />
+                    <div style={{ marginBottom: 8 }}>
+                      {canEdit && (
+                        <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addTourist}>
+                          添加一名游客
+                        </Button>
+                      )}
+                    </div>
+                    <Table
+                      rowKey="key"
+                      dataSource={formValues.teamPresetSnapshot.tourists}
+                      columns={touristColumns}
+                      pagination={false}
+                      size="small"
+                      scroll={{ x: 1400 }}
+                      locale={{ emptyText: '暂无游客信息' }}
+                    />
                   </Card>
                 ),
               },

@@ -38,7 +38,7 @@ import {
   type SubsidyOperationLog,
   type SubsidyStatus,
 } from '../../types'
-import { formatMoney } from '../../utils'
+import { formatMoney, maskIdNumber, maskPhone } from '../../utils'
 
 const { Text } = Typography
 
@@ -109,7 +109,7 @@ export default function SubsidyDetail() {
 
   // 表格列定义（只读）
   const receptionColumns = [
-    { title: '申请项目', dataIndex: 'project', width: 220 },
+    { title: '申请项目', dataIndex: 'project', width: 300 },
     {
       title: '申请奖励金额（元）',
       dataIndex: 'amount',
@@ -155,10 +155,10 @@ export default function SubsidyDetail() {
         return m[v] || v
       },
     },
-    { title: '证件号码', dataIndex: 'idNumber', width: 160 },
+    { title: '证件号码', dataIndex: 'idNumber', width: 160, render: (v: string) => maskIdNumber(v) || '-' },
     { title: '国籍/地区', dataIndex: 'nationality', width: 110, align: 'center' as const },
     { title: '客源地', dataIndex: 'sourcePlace', width: 120 },
-    { title: '手机号', dataIndex: 'phone', width: 130 },
+    { title: '手机号', dataIndex: 'phone', width: 130, render: (v?: string) => (v ? maskPhone(v) : '-') },
   ]
 
   return (
@@ -183,9 +183,11 @@ export default function SubsidyDetail() {
                 编辑
               </Button>
             )}
-            <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>
-              导出附件
-            </Button>
+            {isApplicant && (
+              <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>
+                导出附件
+              </Button>
+            )}
           </Space>
         }
       >
@@ -203,7 +205,7 @@ export default function SubsidyDetail() {
               <Divider type="vertical" />
               <span>锁定时间：{app.lockDeadline}</span>
               <Divider type="vertical" />
-              <Tooltip title="出团前一日 24:00 前可修改">
+              <Tooltip title="行程结束日 24:00 前可修改（行程结束当日仍可修改）">
                 <Tag color={countdown.color} icon={<ClockCircleOutlined />}>
                   剩余可修改：{countdown.text}
                 </Tag>
@@ -527,9 +529,11 @@ export default function SubsidyDetail() {
                       编辑
                     </Button>
                   )}
-                  <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>
-                    导出附件
-                  </Button>
+                  {isApplicant && (
+                    <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>
+                      导出附件
+                    </Button>
+                  )}
                 </Space>
               </Col>
             </Row>
@@ -537,7 +541,9 @@ export default function SubsidyDetail() {
         </div>
       </PageContainer>
 
-      <SubsidyExport open={exportOpen} onClose={() => setExportOpen(false)} applicationId={app.id} />
+      {isApplicant && (
+        <SubsidyExport open={exportOpen} onClose={() => setExportOpen(false)} applicationId={app.id} />
+      )}
     </>
   )
 }

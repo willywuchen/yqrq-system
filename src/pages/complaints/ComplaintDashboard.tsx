@@ -349,7 +349,7 @@ export default function ComplaintDashboard() {
       .sort((a, b) => b.count - a.count)
   }, [filtered])
 
-  // ===== 旅游类别分布（横向柱状图）=====
+  // ===== 投诉类别分布（横向柱状图）=====
   const categoryStats = useMemo(() => {
     const map = new Map<TourismCategory, number>()
     Object.keys(TourismCategoryLabels).forEach((k) => map.set(k as TourismCategory, 0))
@@ -566,7 +566,7 @@ export default function ComplaintDashboard() {
             </Card>
           </Col>
           <Col span={12}>
-            <Card title="旅游类别分布" size="small">
+            <Card title="投诉类别分布" size="small">
               {categoryStats.length === 0 ? (
                 <Text type="secondary">暂无数据</Text>
               ) : (

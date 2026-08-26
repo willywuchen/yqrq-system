@@ -116,7 +116,7 @@ export default function ComplaintDetail() {
             <Descriptions.Item label="投诉方式">
               <Tag color="blue">{ComplaintMethodLabels[complaint.complaintMethod]}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="旅游类别">
+            <Descriptions.Item label="投诉类别">
               <Tag color="geekblue">{TourismCategoryLabels[complaint.tourismCategory]}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label="投诉时间">{complaint.complaintTime}</Descriptions.Item>
@@ -175,17 +175,11 @@ export default function ComplaintDetail() {
         {/* 办理与审核 */}
         <Card title="办理与审核" size="small" style={{ marginBottom: 16 }}>
           <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="办理意见">
+            <Descriptions.Item label="投诉办理人员意见">
               {complaint.handlerOpinion || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="审核意见">
+            <Descriptions.Item label="负责人审核意见">
               {complaint.reviewerOpinion || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="是否诉转案">
-              {complaint.isTransferredToCase ? <Tag color="volcano">诉转案</Tag> : '否'}
-            </Descriptions.Item>
-            <Descriptions.Item label="涉嫌问题">
-              {complaint.suspectedIssue || '-'}
             </Descriptions.Item>
           </Descriptions>
         </Card>

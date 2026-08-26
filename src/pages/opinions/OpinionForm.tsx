@@ -11,27 +11,22 @@ import {
   Col,
   Tag,
   App,
-  InputNumber,
 } from 'antd'
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
+import RichTextEditor, { richTextToPlain } from '../../components/RichTextEditor'
 import { useStore } from '../../store'
 import {
   OpinionDataSourceLabels,
-  OpinionSentimentLabels,
   OpinionRiskLevelLabels,
-  OpinionRiskScoreRange,
   OpinionHandleStatusLabels,
   OpinionHandleStatusColors,
   TourismCategoryLabels,
   GUIZHOU_CITIES,
   type PublicOpinion,
-  type OpinionDataSource,
-  type OpinionSentiment,
-  type OpinionRiskLevel,
-  type TourismCategory,
+  type OpinionHandleStatus,
   type OpinionHandleLog,
 } from '../../types'
 import { genId, nowStr } from '../../utils'
@@ -82,10 +77,13 @@ export default function OpinionForm({ mode }: Props) {
     addOpinion,
     updateOpinion,
     appendOpinionLog,
+    setOpinionStatus,
     currentUser,
   } = useStore()
   const [form] = Form.useForm()
   const [submitting, setSubmitting] = useState(false)
+  // 编辑模式下当前选择的处理类型，用于控制处理描述的显隐
+  const [handleStatus, setHandleStatus] = useState<OpinionHandleStatus>('pending')
 
   const editingId = mode === 'edit' ? params.id : undefined
   const editingOpinion = editingId
@@ -107,43 +105,34 @@ export default function OpinionForm({ mode }: Props) {
           : undefined,
         dataSource: editingOpinion.dataSource,
         tourismCategory: editingOpinion.tourismCategory,
-        sentiment: editingOpinion.sentiment,
         riskLevel: editingOpinion.riskLevel,
-        riskScore: editingOpinion.riskScore,
         involvedSubjects: editingOpinion.involvedSubjects,
         remark: editingOpinion.remark,
+        handleStatus: editingOpinion.handleStatus,
       })
+      setHandleStatus(editingOpinion.handleStatus)
     } else {
       form.resetFields()
       form.setFieldsValue({
         dataSource: 'manual_entry',
-        sentiment: 'negative',
         riskLevel: 'medium',
         authorLocation: '贵阳市',
       })
     }
   }, [editingOpinion, form])
 
-  // 风险等级改变时自动计算 riskScore 区间中点
-  const handleRiskLevelChange = (level: OpinionRiskLevel) => {
-    const [min, max] = OpinionRiskScoreRange[level]
-    const mid = Math.round((min + max) / 2)
-    form.setFieldsValue({ riskScore: mid, riskLevel: level })
-  }
-
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
       setSubmitting(true)
 
-      const publishTime =
-        values.publishTime instanceof dayjs.Dayjs
-          ? values.publishTime.format('YYYY-MM-DD HH:mm:ss')
-          : values.publishTime
+      const publishTime = dayjs.isDayjs(values.publishTime)
+        ? values.publishTime.format('YYYY-MM-DD HH:mm:ss')
+        : values.publishTime
+      const now = nowStr()
 
       if (mode === 'new') {
         const id = `PO-${dayjs().format('YYYYMMDD')}-${genId('').slice(-4)}`
-        const now = nowStr()
         const log: OpinionHandleLog = {
           id: genId('LOG'),
           operator: currentUser.name,
@@ -164,9 +153,8 @@ export default function OpinionForm({ mode }: Props) {
           publishTime,
           dataSource: values.dataSource,
           tourismCategory: values.tourismCategory,
-          sentiment: values.sentiment,
+          sentiment: 'neutral',
           riskLevel: values.riskLevel,
-          riskScore: values.riskScore,
           handleStatus: 'pending',
           involvedSubjects: values.involvedSubjects || [],
           attachments: [],
@@ -180,7 +168,6 @@ export default function OpinionForm({ mode }: Props) {
         message.success(`舆情新增成功，编号：${id}`)
         navigate(`/public-opinion/${id}`)
       } else if (editingOpinion) {
-        const now = nowStr()
         updateOpinion(editingOpinion.id, {
           title: values.title,
           author: values.author,
@@ -192,25 +179,52 @@ export default function OpinionForm({ mode }: Props) {
           publishTime,
           dataSource: values.dataSource,
           tourismCategory: values.tourismCategory,
-          sentiment: values.sentiment,
           riskLevel: values.riskLevel,
-          riskScore: values.riskScore,
           involvedSubjects: values.involvedSubjects || [],
           remark: values.remark,
         })
-        const log: OpinionHandleLog = {
+        const editLog: OpinionHandleLog = {
           id: genId('LOG'),
           operator: currentUser.name,
           action: 'edit',
           opinion: '编辑舆情信息',
           time: now,
         }
-        appendOpinionLog(editingOpinion.id, log)
+        appendOpinionLog(editingOpinion.id, editLog)
+
+        // 处置：处理类型变化时更新状态并记录日志；已处理必须填写处理描述（表单校验保证）
+        const newStatus: OpinionHandleStatus = values.handleStatus
+        const handleDesc = (values.handleDescription || '').trim()
+        if (newStatus !== editingOpinion.handleStatus) {
+          let action: OpinionHandleLog['action'] = 'edit'
+          if (newStatus === 'pending') action = 'reopen'
+          else if (newStatus === 'processing') action = 'process'
+          else if (newStatus === 'handled') action = 'handle'
+          const log: OpinionHandleLog = {
+            id: genId('LOG'),
+            operator: currentUser.name,
+            action,
+            fromStatus: editingOpinion.handleStatus,
+            toStatus: newStatus,
+            opinion: handleDesc || `处置状态变更为${OpinionHandleStatusLabels[newStatus]}`,
+            time: now,
+          }
+          setOpinionStatus(editingOpinion.id, newStatus, log)
+        } else if (handleDesc) {
+          appendOpinionLog(editingOpinion.id, {
+            id: genId('LOG'),
+            operator: currentUser.name,
+            action: 'edit',
+            opinion: `处置说明：${handleDesc}`,
+            time: now,
+          })
+        }
         message.success('舆情信息已更新')
         navigate(`/public-opinion/${editingOpinion.id}`)
       }
     } catch (err) {
-      // 校验失败由 antd 处理
+      // 校验失败由 antd 处理；其余异常输出到控制台便于排查
+      console.error('OpinionForm 提交异常', err)
     } finally {
       setSubmitting(false)
     }
@@ -340,15 +354,20 @@ export default function OpinionForm({ mode }: Props) {
                   name="content"
                   label="舆情内容"
                   rules={[
-                    { required: true, message: '请输入舆情内容' },
-                    { max: 5000, message: '内容不能超过5000字符' },
+                    {
+                      required: true,
+                      validator: (_, value) => {
+                        const plain = richTextToPlain(value)
+                        if (!plain) return Promise.reject(new Error('请输入舆情内容'))
+                        if (plain.length > 5000) return Promise.reject(new Error('内容不能超过5000字符'))
+                        return Promise.resolve()
+                      },
+                    },
                   ]}
                 >
-                  <TextArea
-                    rows={6}
-                    placeholder="请输入舆情正文内容"
-                    maxLength={5000}
-                    showCount
+                  <RichTextEditor
+                    placeholder="请输入舆情正文内容，支持图文混排（可加粗、列表、插入图片等）"
+                    minHeight={220}
                   />
                 </Form.Item>
               </Col>
@@ -358,7 +377,7 @@ export default function OpinionForm({ mode }: Props) {
           {/* Section 2 - 分类与风险 */}
           <Card title="分类与风险" style={{ marginBottom: 16 }}>
             <Row gutter={24}>
-              <Col span={6}>
+              <Col span={8}>
                 <Form.Item
                   name="dataSource"
                   label="数据来源"
@@ -372,7 +391,7 @@ export default function OpinionForm({ mode }: Props) {
                   />
                 </Form.Item>
               </Col>
-              <Col span={6}>
+              <Col span={8}>
                 <Form.Item
                   name="tourismCategory"
                   label="旅游类别"
@@ -386,38 +405,18 @@ export default function OpinionForm({ mode }: Props) {
                   />
                 </Form.Item>
               </Col>
-              <Col span={4}>
-                <Form.Item
-                  name="sentiment"
-                  label="情感倾向"
-                  rules={[{ required: true, message: '请选择情感倾向' }]}
-                >
-                  <Select
-                    options={Object.entries(OpinionSentimentLabels).map(([k, v]) => ({
-                      value: k,
-                      label: v,
-                    }))}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={4}>
+              <Col span={8}>
                 <Form.Item
                   name="riskLevel"
                   label="风险等级"
                   rules={[{ required: true, message: '请选择风险等级' }]}
                 >
                   <Select
-                    onChange={handleRiskLevelChange}
                     options={Object.entries(OpinionRiskLevelLabels).map(([k, v]) => ({
                       value: k,
                       label: v,
                     }))}
                   />
-                </Form.Item>
-              </Col>
-              <Col span={4}>
-                <Form.Item name="riskScore" label="风险指数(0-100)">
-                  <InputNumber min={0} max={100} style={{ width: '100%' }} />
                 </Form.Item>
               </Col>
               <Col span={24}>
@@ -436,6 +435,49 @@ export default function OpinionForm({ mode }: Props) {
               </Col>
             </Row>
           </Card>
+
+          {/* Section 3 - 舆情处置（仅编辑时可对舆情进行处置） */}
+          {mode === 'edit' && (
+            <Card title="舆情处置" style={{ marginBottom: 16 }}>
+              <Row gutter={24}>
+                <Col span={8}>
+                  <Form.Item
+                    name="handleStatus"
+                    label="处理类型"
+                    rules={[{ required: true, message: '请选择处理类型' }]}
+                  >
+                    <Select
+                      placeholder="请选择处理类型"
+                      onChange={(v: OpinionHandleStatus) => setHandleStatus(v)}
+                      options={Object.entries(OpinionHandleStatusLabels).map(([k, v]) => ({
+                        value: k,
+                        label: v,
+                      }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={16}>
+                  {handleStatus === 'handled' && (
+                    <Form.Item
+                      name="handleDescription"
+                      label="处理描述"
+                      rules={[
+                        { required: true, message: '处理类型为已处理时，必须填写处理描述' },
+                        { max: 500, message: '处理描述不能超过500字符' },
+                      ]}
+                    >
+                      <TextArea
+                        rows={2}
+                        placeholder="请输入处理结果、整改说明等处理描述"
+                        maxLength={500}
+                        showCount
+                      />
+                    </Form.Item>
+                  )}
+                </Col>
+              </Row>
+            </Card>
+          )}
 
           {/* 操作区 */}
           <Card>

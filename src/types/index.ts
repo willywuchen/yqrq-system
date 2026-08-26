@@ -167,10 +167,10 @@ export const StatusColors: Record<ApplicationStatus, string> = {
 export type UserRole = 'applicant' | 'initial_reviewer' | 'review_reviewer' | 'final_reviewer' | 'admin';
 
 export const UserRoleLabels: Record<UserRole, string> = {
-  applicant: '旅行社申报员',
+  applicant: '旅行社',
   initial_reviewer: '第三方初审员',
   review_reviewer: '市州复审员',
-  final_reviewer: '省文旅厅终审员',
+  final_reviewer: '省文旅厅',
   admin: '系统管理员',
 };
 
@@ -223,6 +223,12 @@ export interface TouristItem {
   age?: number;
   // 性别（用于数据统计）
   gender?: 'male' | 'female' | 'unknown';
+  // 出生日期
+  birthDate?: string;
+  // 合同状态（已签订 / 未签订 / 履约中 / 已解除）
+  contractStatus?: string;
+  // 合同编号
+  contractNo?: string;
 }
 
 // ========== 景区信息（政策：至少2个4A+景区） ==========
@@ -502,7 +508,275 @@ export interface Complaint {
 export const GUIZHOU_CITIES = [
   '贵阳市', '六盘水市', '遵义市', '安顺市', '毕节市', '铜仁市',
   '黔西南布依族苗族自治州', '黔东南苗族侗族自治州', '黔南布依族苗族自治州',
-];
+]
+
+// 贵州省各市州下辖区县（省-市州-区县三级区域级联）
+export const GUIZHOU_DISTRICTS: Record<string, string[]> = {
+  贵阳市: ['南明区', '云岩区', '花溪区', '乌当区', '白云区', '观山湖区', '清镇市', '修文县', '息烽县', '开阳县'],
+  六盘水市: ['钟山区', '六枝特区', '水城区', '盘州市'],
+  遵义市: ['红花岗区', '汇川区', '播州区', '桐梓县', '绥阳县', '正安县', '凤冈县', '湄潭县', '余庆县', '习水县', '道真仡佬族苗族自治县', '务川仡佬族苗族自治县', '赤水市', '仁怀市'],
+  安顺市: ['西秀区', '平坝区', '普定县', '镇宁布依族苗族自治县', '关岭布依族苗族自治县', '紫云苗族布依族自治县'],
+  毕节市: ['七星关区', '大方县', '黔西市', '金沙县', '织金县', '纳雍县', '威宁彝族回族苗族自治县', '赫章县'],
+  铜仁市: ['碧江区', '万山区', '江口县', '玉屏侗族自治县', '石阡县', '思南县', '印江土家族苗族自治县', '德江县', '沿河土家族自治县', '松桃苗族自治县'],
+  黔西南布依族苗族自治州: ['兴义市', '兴仁市', '普安县', '晴隆县', '贞丰县', '望谟县', '册亨县', '安龙县'],
+  黔东南苗族侗族自治州: ['凯里市', '黄平县', '施秉县', '三穗县', '镇远县', '岑巩县', '天柱县', '锦屏县', '剑河县', '台江县', '黎平县', '榕江县', '从江县', '雷山县', '麻江县', '丹寨县'],
+  黔南布依族苗族自治州: ['都匀市', '福泉市', '荔波县', '贵定县', '瓮安县', '独山县', '平塘县', '罗甸县', '长顺县', '龙里县', '惠水县', '三都水族自治县'],
+}
+
+// 贵州省 区域级联选项（省 > 市州 > 区县）
+export const GUIZHOU_REGION_OPTIONS = [
+  {
+    value: '贵州省',
+    label: '贵州省',
+    children: GUIZHOU_CITIES.map((city) => ({
+      value: city,
+      label: city,
+      children: (GUIZHOU_DISTRICTS[city] || []).map((district) => ({
+        value: district,
+        label: district,
+      })),
+    })),
+  },
+]
+
+// ========== 投诉数据报表 ==========
+export type ComplaintReportType = 'low_season_month' | 'peak_week' | 'important_day'
+
+export const ComplaintReportTypeLabels: Record<ComplaintReportType, string> = {
+  low_season_month: '淡季月报',
+  peak_week: '旺季周报',
+  important_day: '重要时段日报',
+}
+
+export const ComplaintReportTypeColors: Record<ComplaintReportType, string> = {
+  low_season_month: 'blue',
+  peak_week: 'orange',
+  important_day: 'red',
+}
+
+export type ComplaintReportScope = 'province' | 'city' | 'district'
+
+export const ComplaintReportScopeLabels: Record<ComplaintReportScope, string> = {
+  province: '省级',
+  city: '市级',
+  district: '县级',
+}
+
+export type ComplaintReportStatus = 'normal' | 'empty' | 'partial'
+
+export type ComplaintReportChapterKind =
+  | 'overview'
+  | 'core_metrics'
+  | 'method_pie'
+  | 'category_bar'
+  | 'region_bar'
+  | 'status_donut'
+  | 'trend_line'
+  | 'top_respondents'
+  | 'quality'
+  | 'hot_topics'
+  | 'risk_warning'
+  | 'media_focus'
+  | 'ai_insight'
+  | 'advice'
+  | 'detail_attach'
+
+export const ComplaintReportChapterKindLabels: Record<ComplaintReportChapterKind, string> = {
+  overview: '本期综述',
+  core_metrics: '核心指标',
+  method_pie: '投诉方式分布',
+  category_bar: '旅游类别分布',
+  region_bar: '区域分布',
+  status_donut: '处理状态分布',
+  trend_line: '投诉数量趋势',
+  top_respondents: '高发被投诉人 Top10',
+  quality: '办理质量',
+  hot_topics: '热点追踪',
+  risk_warning: '敏感信息预警',
+  media_focus: '媒体关注焦点',
+  ai_insight: '风险研判段',
+  advice: '下期建议',
+  detail_attach: '明细附件',
+}
+
+export interface ComplaintReportChapter {
+  kind: ComplaintReportChapterKind
+  title: string
+  enabled: boolean
+}
+
+export interface ComplaintReportTemplate {
+  templateId: string
+  templateName: string
+  reportType: ComplaintReportType
+  chapters: ComplaintReportChapter[]
+}
+
+// 淡旺季季节类型
+export type ComplaintSeason = 'low' | 'peak' | 'important'
+
+export const ComplaintSeasonLabels: Record<ComplaintSeason, string> = {
+  low: '淡季',
+  peak: '旺季',
+  important: '重要时段',
+}
+
+export const ComplaintSeasonColors: Record<ComplaintSeason, string> = {
+  low: 'blue',
+  peak: 'orange',
+  important: 'red',
+}
+
+export interface ComplaintSeasonCalendarItem {
+  month: string // YYYY-MM
+  season: ComplaintSeason
+}
+
+// 报表快照数据（生成时冻结的统计结果，便于回溯）
+export interface ComplaintReportSnapshot {
+  total: number
+  pending: number
+  closedCount: number
+  closedRate: number
+  methodStats: { method: string; label: string; count: number }[]
+  categoryStats: { category: string; label: string; count: number }[]
+  regionStats: { name: string; count: number }[]
+  statusStats: { status: string; label: string; count: number }[]
+  trendStats: { label: string; count: number }[]
+  topRespondents: { name: string; count: number; lastComplaintTime: string }[]
+  avgHandleDays: number
+  transferredCount: number
+  detailIds: string[]
+  // 聚类分析（V1.2：同一区域×相同类型 + 同一商家重复投诉，V1.3 起并入风险研判段呈现）
+  regionCategoryClusters: { region: string; categoryLabel: string; count: number }[]
+  respondentClusters: { name: string; count: number; categories: string[]; lastComplaintTime: string }[]
+  // V1.3 研判分析扩展（全部在风险研判段呈现，不再单独列章）
+  // 投诉内容高频关键词
+  keywordStats: { keyword: string; count: number }[]
+  // 上期投诉量与环比变化率（%，正为上升）
+  prevPeriodCount: number
+  momRate: number
+  // 商家风险等级评定（红/橙/黄）
+  riskGrading: { name: string; level: 'red' | 'orange' | 'yellow'; count: number; reason: string }[]
+  // 典型案例（代表性投诉）
+  typicalCases: { id: string; title: string; content: string; reason: string }[]
+}
+
+export interface ComplaintReport {
+  id: string
+  title: string
+  reportType: ComplaintReportType
+  periodStart: string
+  periodEnd: string
+  scopeLevel: ComplaintReportScope
+  scopeName: string
+  generatedBy: string
+  generatedAt: string
+  summary: string
+  hasAiInsight: boolean
+  aiInsight?: string
+  status: ComplaintReportStatus
+  templateId: string
+  chapters: ComplaintReportChapter[]
+  snapshot: ComplaintReportSnapshot
+  trigger: 'manual' | 'scheduled'
+  deleted?: boolean
+  deletedAt?: string
+}
+
+export type ComplaintReportArchiveAction =
+  | 'generate' | 'preview' | 'export' | 'delete' | 'restore'
+
+export const ComplaintReportArchiveActionLabels: Record<ComplaintReportArchiveAction, string> = {
+  generate: '生成',
+  preview: '预览',
+  export: '导出',
+  delete: '删除',
+  restore: '恢复',
+}
+
+export interface ComplaintReportArchiveLog {
+  archiveLogId: string
+  reportId: string
+  action: ComplaintReportArchiveAction
+  operator: string
+  operatorLevel: ComplaintReportScope
+  operatedAt: string
+  detail?: string
+}
+
+// 淡旺季日历默认值（V1.1 确认）
+// 1-2月重要时段(春节)、3月淡季、4-9月旺季、10月重要时段(国庆)、11-12月淡季
+export function getDefaultSeasonCalendar(): ComplaintSeasonCalendarItem[] {
+  const now = new Date()
+  const year = now.getFullYear()
+  const items: ComplaintSeasonCalendarItem[] = []
+  for (let m = 1; m <= 12; m++) {
+    const monthStr = `${year}-${m.toString().padStart(2, '0')}`
+    let season: ComplaintSeason
+    if (m === 1 || m === 2) season = 'important'
+    else if (m === 3) season = 'low'
+    else if (m >= 4 && m <= 9) season = 'peak'
+    else if (m === 10) season = 'important'
+    else season = 'low'
+    items.push({ month: monthStr, season })
+  }
+  return items
+}
+
+// 三类周期默认模板章节
+// V1.3 调整：研判分析统一收敛到【风险研判段】（ai_insight），不再单独列聚类分析章
+// 弱化办理质量/办结率（quality 默认停用）
+export const DEFAULT_REPORT_CHAPTERS: Record<ComplaintReportType, ComplaintReportChapter[]> = {
+  low_season_month: [
+    { kind: 'overview', title: '一、本期综述', enabled: true },
+    { kind: 'core_metrics', title: '二、核心指标', enabled: true },
+    { kind: 'method_pie', title: '三、投诉方式分布', enabled: true },
+    { kind: 'category_bar', title: '四、旅游类别分布', enabled: true },
+    { kind: 'region_bar', title: '五、区域分布', enabled: true },
+    { kind: 'status_donut', title: '六、处理状态分布', enabled: true },
+    { kind: 'trend_line', title: '七、投诉数量趋势', enabled: true },
+    { kind: 'top_respondents', title: '八、高发被投诉人 Top10', enabled: true },
+    { kind: 'quality', title: '九、办理质量（选填）', enabled: false },
+    { kind: 'ai_insight', title: '十、风险研判段', enabled: true },
+    { kind: 'advice', title: '十一、下期工作建议', enabled: true },
+    { kind: 'detail_attach', title: '附件：投诉明细 Excel', enabled: true },
+  ],
+  peak_week: [
+    { kind: 'overview', title: '一、本周综述', enabled: true },
+    { kind: 'core_metrics', title: '二、核心指标', enabled: true },
+    { kind: 'method_pie', title: '三、投诉方式分布', enabled: true },
+    { kind: 'category_bar', title: '四、旅游类别分布', enabled: true },
+    { kind: 'region_bar', title: '五、区域分布', enabled: true },
+    { kind: 'status_donut', title: '六、处理状态分布', enabled: true },
+    { kind: 'top_respondents', title: '七、高发被投诉人 Top10', enabled: true },
+    { kind: 'hot_topics', title: '八、热点追踪', enabled: true },
+    { kind: 'risk_warning', title: '九、敏感信息预警', enabled: true },
+    { kind: 'media_focus', title: '十、媒体关注焦点', enabled: true },
+    { kind: 'ai_insight', title: '十一、风险研判段', enabled: true },
+    { kind: 'advice', title: '十二、下周工作建议', enabled: true },
+    { kind: 'detail_attach', title: '附件：投诉明细 Excel', enabled: true },
+  ],
+  important_day: [
+    { kind: 'overview', title: '一、当日综述', enabled: true },
+    { kind: 'core_metrics', title: '二、核心指标', enabled: true },
+    { kind: 'category_bar', title: '三、旅游类别分布', enabled: true },
+    { kind: 'region_bar', title: '四、区域分布', enabled: true },
+    { kind: 'status_donut', title: '五、处理状态分布', enabled: true },
+    { kind: 'risk_warning', title: '六、超期未办预警', enabled: true },
+    { kind: 'ai_insight', title: '七、风险研判段', enabled: true },
+    { kind: 'advice', title: '八、次日关注点', enabled: true },
+    { kind: 'detail_attach', title: '附件：投诉明细 Excel', enabled: true },
+  ],
+}
+
+export function getDefaultReportTemplates(): ComplaintReportTemplate[] {
+  return [
+    { templateId: 'TPL-LSM-001', templateName: '淡季月报模板', reportType: 'low_season_month', chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.low_season_month)) },
+    { templateId: 'TPL-PW-001', templateName: '旺季周报模板', reportType: 'peak_week', chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.peak_week)) },
+    { templateId: 'TPL-ID-001', templateName: '重要时段日报模板', reportType: 'important_day', chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.important_day)) },
+  ]
+}
 
 // ========== 舆情管理分析 ==========
 // 数据来源（多方汇聚）
@@ -826,7 +1100,7 @@ export interface SubsidyApplication {
   createTime: string;
   updateTime: string;
   submitTime?: string;
-  // 锁定截止时间：出团日期前一日 23:59:59（等价于出团当日 00:00:00）
+  // 锁定截止时间：行程结束日当日 23:59:59（行程结束当日仍可修改，次日 00:00 锁定）
   lockDeadline: string;
 
   // 创建人
