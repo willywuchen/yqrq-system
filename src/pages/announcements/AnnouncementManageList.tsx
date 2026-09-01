@@ -283,14 +283,23 @@ export default function AnnouncementManageList() {
               )}
             </>
           )}
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => navigate(`/announcements/edit/${a.id}`)}
-          >
-            编辑
-          </Button>
+          {/* 已发布公告不可编辑：只能下架后编辑，再重新发布 */}
+          {a.status === 'published' ? (
+            <Tooltip title="已发布公告不可编辑，请先下架，编辑后重新发布">
+              <Button type="link" size="small" icon={<EditOutlined />} disabled>
+                编辑
+              </Button>
+            </Tooltip>
+          ) : (
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => navigate(`/announcements/edit/${a.id}`)}
+            >
+              编辑
+            </Button>
+          )}
           {(a.status === 'draft' || a.status === 'offline') && (
             <Button type="link" size="small" danger onClick={() => handleDelete(a)}>
               删除
@@ -348,8 +357,8 @@ export default function AnnouncementManageList() {
               options={[
                 { value: 'all', label: '全部对象' },
                 { value: 'erp' as AnnouncementTarget, label: '含 ERP 系统' },
-                { value: 'dept_account' as AnnouncementTarget, label: '含厅内账号' },
-                { value: 'agency_user' as AnnouncementTarget, label: '含旅行社账号' },
+                { value: 'dept_account' as AnnouncementTarget, label: '含监管账号' },
+                { value: 'agency_user' as AnnouncementTarget, label: '含涉旅企业账号' },
               ]}
             />
             <Select

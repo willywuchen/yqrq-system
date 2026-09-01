@@ -23,15 +23,13 @@ import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
 import {
   type Complaint,
-  type ComplaintMethod,
-  ComplaintMethodLabels,
+  type ComplaintSource,
+  ComplaintSourceLabels,
   type TourismCategory,
   TourismCategoryLabels,
   type ComplaintStatus,
   ComplaintStatusLabels,
   type ReplyStatus,
-  ReplyStatusLabels,
-  FORM_REPLY_STATUS_KEYS,
   GUIZHOU_REGION_OPTIONS,
   type Attachment,
 } from '../../types'
@@ -54,11 +52,6 @@ export default function ComplaintForm({ mode }: Props) {
 
   const editingId = mode === 'edit' ? params.id : undefined
   const editingComplaint = editingId ? complaints.find((c) => c.id === editingId) : undefined
-  // 历史数据可能存在"已办结"等不在可录范围内的回复状态，下拉需并入当前值以显示中文标签
-  const watchReplyStatus = Form.useWatch('replyStatus', form) as ReplyStatus | undefined
-  const replyStatusOptions = Array.from(
-    new Set<ReplyStatus>([...FORM_REPLY_STATUS_KEYS, ...(watchReplyStatus ? [watchReplyStatus] : [])]),
-  )
 
   useEffect(() => {
     if (editingComplaint) {
@@ -67,7 +60,7 @@ export default function ComplaintForm({ mode }: Props) {
         region: [editingComplaint.province, editingComplaint.city, editingComplaint.district].filter(
           Boolean,
         ),
-        complaintMethod: editingComplaint.complaintMethod,
+        complaintSource: editingComplaint.complaintSource,
         tourismCategory: editingComplaint.tourismCategory,
         complaintTime: editingComplaint.complaintTime
           ? dayjs(editingComplaint.complaintTime)
@@ -90,7 +83,6 @@ export default function ComplaintForm({ mode }: Props) {
         reviewerOpinion: editingComplaint.reviewerOpinion,
         isTransferred: editingComplaint.isTransferred || false,
         transferDepartment: editingComplaint.transferDepartment,
-        replyStatus: editingComplaint.replyStatus,
         replyTime: editingComplaint.replyTime ? dayjs(editingComplaint.replyTime) : undefined,
         replyContent: editingComplaint.replyContent,
         remark: editingComplaint.remark,
@@ -100,7 +92,6 @@ export default function ComplaintForm({ mode }: Props) {
       form.setFieldsValue({
         region: ['贵州省'],
         status: 'pending',
-        replyStatus: 'none',
         isTransferred: false,
       })
     }
@@ -135,7 +126,7 @@ export default function ComplaintForm({ mode }: Props) {
           province,
           city,
           district,
-          complaintMethod: values.complaintMethod as ComplaintMethod,
+          complaintSource: values.complaintSource as ComplaintSource,
           tourismCategory: values.tourismCategory as TourismCategory,
           complaintTime: values.complaintTime ? values.complaintTime.format('YYYY-MM-DD') : '',
           status: values.status as ComplaintStatus,
@@ -163,7 +154,12 @@ export default function ComplaintForm({ mode }: Props) {
           suspectedIssue: editingComplaint?.suspectedIssue,
           isTransferred: !!values.isTransferred,
           transferDepartment: values.isTransferred ? values.transferDepartment : undefined,
-          replyStatus: values.replyStatus as ReplyStatus,
+          // 回复状态不再单独填写，随办理状态联动（与导入口径一致）
+          replyStatus: (values.status === 'closed'
+            ? 'closed'
+            : values.status === 'replied'
+              ? 'replied'
+              : 'none') as ReplyStatus,
           replyTime: values.replyTime ? values.replyTime.format('YYYY-MM-DD') : undefined,
           replyContent: values.replyContent,
           attachments,
@@ -263,12 +259,12 @@ export default function ComplaintForm({ mode }: Props) {
             <Row gutter={24}>
               <Col span={12}>
                 <Form.Item
-                  name="complaintMethod"
-                  label="投诉方式"
-                  rules={[{ required: true, message: '请选择投诉方式' }]}
+                  name="complaintSource"
+                  label="投诉来源"
+                  rules={[{ required: true, message: '请选择投诉来源' }]}
                 >
-                  <Select placeholder="请选择投诉方式">
-                    {Object.entries(ComplaintMethodLabels).map(([value, label]) => (
+                  <Select placeholder="请选择投诉来源">
+                    {Object.entries(ComplaintSourceLabels).map(([value, label]) => (
                       <Select.Option key={value} value={value}>
                         {label}
                       </Select.Option>
@@ -432,17 +428,6 @@ export default function ComplaintForm({ mode }: Props) {
           {/* Section 6 - 办理回复 */}
           <Card title="办理回复" style={{ marginBottom: 16 }}>
             <Row gutter={24}>
-              <Col span={12}>
-                <Form.Item name="replyStatus" label="回复状态">
-                  <Select>
-                    {replyStatusOptions.map((value) => (
-                      <Select.Option key={value} value={value}>
-                        {ReplyStatusLabels[value]}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
               <Col span={12}>
                 <Form.Item name="replyTime" label="回复时间">
                   <DatePicker style={{ width: '100%' }} />

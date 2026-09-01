@@ -196,7 +196,7 @@ const roleMenuMap: Record<UserRole, any[]> = {
     trainingManageMenu,
     announcementManageMenu,
   ],
-  // 第三方审核：仅有补贴申报查看权限（只读视角，不含数据统计）
+  // 第三方查验：仅有补贴申报查看权限（只读视角，不含数据统计）
   third_party_reviewer: [
     {
       key: 'subsidy-management',

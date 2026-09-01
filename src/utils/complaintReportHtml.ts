@@ -1,6 +1,6 @@
 import {
   ComplaintReportScopeLabels,
-  ComplaintMethodLabels,
+  ComplaintSourceLabels,
   TourismCategoryLabels,
   ComplaintStatusLabels,
   ReplyStatusLabels,
@@ -17,7 +17,7 @@ function normalizeSnapshot(s: any): ComplaintReportSnapshot {
     pending: s?.pending ?? 0,
     closedCount: s?.closedCount ?? 0,
     closedRate: s?.closedRate ?? 0,
-    methodStats: s?.methodStats ?? [],
+    sourceStats: s?.sourceStats ?? [],
     categoryStats: s?.categoryStats ?? [],
     regionStats: s?.regionStats ?? [],
     statusStats: s?.statusStats ?? [],
@@ -147,10 +147,10 @@ function coreMetricsNote(s: ComplaintReportSnapshot): string {
 }
 
 function methodNote(s: ComplaintReportSnapshot): string {
-  if (s.methodStats.length === 0) return '本期无投诉来源数据。'
-  const top = s.methodStats[0]
+  if (s.sourceStats.length === 0) return '本期无投诉来源数据。'
+  const top = s.sourceStats[0]
   const topPct = s.total > 0 ? ((top.count / s.total) * 100).toFixed(2) : '-'
-  return `从投诉来源来划分。${enumStats(s.methodStats.map((m) => ({ label: m.label, count: m.count })), s.total)}。投诉来源以${top.label}为主，占${topPct}%，是游客反映涉旅问题的主要渠道，建议持续保障该渠道受理与转办时效。`
+  return `从投诉来源来划分。${enumStats(s.sourceStats.map((m) => ({ label: m.label, count: m.count })), s.total)}。投诉来源以${top.label}为主，占${topPct}%，是游客反映涉旅问题的主要渠道，建议持续保障该渠道受理与转办时效。`
 }
 
 function regionNote(s: ComplaintReportSnapshot): string {
@@ -464,13 +464,13 @@ function buildOverviewText(report: ComplaintReport): string {
   if (s.total === 0) {
     return `${period}，${scope}统计范围内无投诉数据，旅游市场整体运行平稳。`
   }
-  const topMethod = s.methodStats[0]
+  const topSource = s.sourceStats[0]
   const topRegion = s.regionStats[0]
   const topCategory = s.categoryStats[0]
   const momText = s.prevPeriodCount === 0
     ? ''
     : `与上一周期（${s.prevPeriodCount} 件）相比${s.momRate >= 0 ? '上升' : '下降'} ${Math.abs(s.momRate).toFixed(1)}%。`
-  const methodText = topMethod ? `从投诉来源看，${topMethod.label}占比最高（${((topMethod.count / s.total) * 100).toFixed(2)}%）；` : ''
+  const methodText = topSource ? `从投诉来源看，${topSource.label}占比最高（${((topSource.count / s.total) * 100).toFixed(2)}%）；` : ''
   const regionText = topRegion ? `从行政区域看，${topRegion.name}投诉量居前（${topRegion.count}件）；` : ''
   const categoryText = topCategory ? `从被投诉对象看，${topCategory.label}类投诉最为集中（${topCategory.count}件，占${((topCategory.count / s.total) * 100).toFixed(2)}%）。` : ''
   return `${period}，${scope}共受理旅游投诉 ${s.total} 件，其中待办 ${s.pending} 件、已办结 ${s.closedCount} 件。${methodText}${regionText}${categoryText}${momText}`
@@ -522,7 +522,7 @@ export function buildComplaintReportHtml(report: ComplaintReport): string {
         case 'core_metrics':
           return sectionHtml(id, c.title, coreMetricsHtml(s) + chartNote(coreMetricsNote(s)))
         case 'method_pie':
-          return sectionHtml(id, c.title, statTable(s.methodStats.map((m) => ({ label: m.label, count: m.count })), s.total) + chartNote(methodNote(s)))
+          return sectionHtml(id, c.title, statTable(s.sourceStats.map((m) => ({ label: m.label, count: m.count })), s.total) + chartNote(methodNote(s)))
         case 'category_bar':
           return sectionHtml(id, c.title, statTable(s.categoryStats.map((m) => ({ label: m.label, count: m.count })), s.total) + chartNote(categoryNote(s)))
         case 'region_bar':
@@ -616,12 +616,12 @@ export function buildComplaintReportHtml(report: ComplaintReport): string {
 export function exportComplaintDetailCsv(report: ComplaintReport, complaints: Complaint[]) {
   const details = complaints.filter((c) => report.snapshot.detailIds.includes(c.id))
   const period = `${report.periodStart} ~ ${report.periodEnd}`
-  const header = ['序号', '投诉编号', '投诉时间', '投诉方式', '旅游类别', '投诉人', '联系电话', '省', '市', '县', '被投诉人', '状态', '办结状态', '转立案', '投诉内容', '统计周期']
+  const header = ['序号', '投诉编号', '投诉时间', '投诉来源', '旅游类别', '投诉人', '联系电话', '省', '市', '县', '被投诉人', '状态', '办结状态', '转立案', '投诉内容', '统计周期']
   const rows = details.map((c, i) => [
     i + 1,
     c.id,
     c.complaintTime,
-    ComplaintMethodLabels[c.complaintMethod] || c.complaintMethod,
+    ComplaintSourceLabels[c.complaintSource] || c.complaintSource,
     TourismCategoryLabels[c.tourismCategory] || c.tourismCategory,
     c.complainant.name,
     c.complainant.phone || '-',

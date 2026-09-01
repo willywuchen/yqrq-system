@@ -127,6 +127,7 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
       summary: editing.summary,
       source: editing.source,
       isTop: editing.isTop,
+      isPublicToAgency: editing.isPublicToAgency,
     })
     setMediaType(editing.mediaType)
     setRichText(editing.content || '')
@@ -179,8 +180,22 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
     )
   }
 
-  // 已发布资料编辑提示（PRD §5.2 状态清单）
+  // 已发布资料不允许编辑：只能下架后编辑，再重新发布（编辑前状态）
   const editingStatus = editing?.status
+  if (mode === 'edit' && editingStatus === 'published') {
+    return (
+      <Result
+        status="info"
+        title="该资料已发布，不可编辑"
+        subTitle="如需修改内容，请先在文库发布列表将其下架，下架后编辑并重新发布"
+        extra={
+          <Button type="primary" onClick={() => navigate('/training')}>
+            返回文库发布
+          </Button>
+        }
+      />
+    )
+  }
 
   // 分类选项：启用中的分类；编辑时所属分类已停用则额外带入并标注
   const enabledCategories = [...trainingCategories]
@@ -297,8 +312,8 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
     const willPublish = target === 'publish'
     const keepStatus: TrainingMaterialStatus = editing ? editing.status : 'draft'
     const nextStatus: TrainingMaterialStatus = willPublish ? 'published' : keepStatus
-    // 校验强度：将处于已发布态时需全量校验；草稿/已下架保存仅校验标题（PRD §5.2）
-    const strict = willPublish || nextStatus === 'published'
+    // 发布时全量校验；草稿/已下架保存仅校验标题（PRD §5.2）
+    const strict = willPublish
     try {
       if (strict) await form.validateFields()
       else await form.validateFields(['title'])
@@ -334,6 +349,7 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
       summary: values.summary?.trim() || undefined,
       source: values.source?.trim() || undefined,
       isTop: !!values.isTop,
+      isPublicToAgency: !!values.isPublicToAgency,
       coverUrl: cover?.url,
       content: mediaType === 'rich_text' ? richText : undefined,
       videoUrl: mediaType === 'video' ? media?.url : undefined,
@@ -363,12 +379,10 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
     }
     message.success(
       willPublish
-        ? '已发布，旅行社侧即时可见'
-        : nextStatus === 'published'
-          ? '修改已保存并即时生效'
-          : nextStatus === 'offline'
-            ? '已保存，资料仍为已下架状态'
-            : '已保存为草稿，可在管理列表继续编辑',
+        ? '已发布' + (values.isPublicToAgency ? '，涉旅企业侧即时可见' : '，未向涉旅企业公开、仅文旅厅内部可见')
+        : nextStatus === 'offline'
+          ? '已保存，资料仍为已下架状态'
+          : '已保存为草稿，可在管理列表继续编辑',
     )
     navigate('/training')
   }
@@ -387,8 +401,7 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
     }
   }
 
-  const saveButtonLabel =
-    editingStatus === 'published' || editingStatus === 'offline' ? '保 存' : '保存为草稿'
+  const saveButtonLabel = editingStatus === 'offline' ? '保 存' : '保存为草稿'
 
   return (
     <>
@@ -402,20 +415,12 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
         ]}
       />
       <PageContainer>
-        {editingStatus === 'published' && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="该资料已发布，保存后修改即时对旅行社生效"
-          />
-        )}
         {editingStatus === 'offline' && (
           <Alert
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
-            message="该资料已下架，保存后仍为下架状态；点击「重新发布」可恢复对旅行社可见"
+            message="该资料已下架，保存后仍为下架状态；点击「重新发布」可恢复对涉旅企业可见"
           />
         )}
 
@@ -423,7 +428,7 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
           <Form
             form={form}
             layout="vertical"
-            initialValues={{ level: 'departmental', isTop: false }}
+            initialValues={{ level: 'departmental', isTop: false, isPublicToAgency: true }}
             onValuesChange={() => setDirty(true)}
             style={{ maxWidth: 860 }}
           >
@@ -488,6 +493,14 @@ export default function TrainingForm({ mode }: { mode: 'new' | 'edit' }) {
             <Space size={32} wrap>
               <Form.Item name="isTop" label="置顶" valuePropName="checked">
                 <Switch checkedChildren="是" unCheckedChildren="否" />
+              </Form.Item>
+              <Form.Item
+                name="isPublicToAgency"
+                label="是否向涉旅企业公开"
+                valuePropName="checked"
+                help="开启后，旅行社等涉旅企业账号可在文库查看中浏览该资料；关闭则仅文旅厅内部可见"
+              >
+                <Switch checkedChildren="公开" unCheckedChildren="不公开" />
               </Form.Item>
               <Form.Item label="封面图（选填，jpg/png，≤5MB，自动压缩存储）">
                 <Space>

@@ -1,10 +1,10 @@
 import dayjs from 'dayjs'
 import {
-  ComplaintMethodLabels,
+  ComplaintSourceLabels,
   TourismCategoryLabels,
   ComplaintStatusLabels,
   type Complaint,
-  type ComplaintMethod,
+  type ComplaintSource,
   type ComplaintStatus,
   type TourismCategory,
   type ComplaintReportSnapshot,
@@ -82,12 +82,12 @@ export function buildComplaintReportSnapshot(
   const closedCount = filtered.filter((c) => c.status === 'closed').length
   const closedRate = total > 0 ? (closedCount / total) * 100 : 0
 
-  // 方式分布
-  const methodMap = new Map<ComplaintMethod, number>()
-  Object.keys(ComplaintMethodLabels).forEach((k) => methodMap.set(k as ComplaintMethod, 0))
-  filtered.forEach((c) => methodMap.set(c.complaintMethod, (methodMap.get(c.complaintMethod) || 0) + 1))
-  const methodStats = Array.from(methodMap.entries())
-    .map(([k, v]) => ({ method: k, label: ComplaintMethodLabels[k], count: v }))
+  // 来源分布
+  const sourceMap = new Map<ComplaintSource, number>()
+  Object.keys(ComplaintSourceLabels).forEach((k) => sourceMap.set(k as ComplaintSource, 0))
+  filtered.forEach((c) => sourceMap.set(c.complaintSource, (sourceMap.get(c.complaintSource) || 0) + 1))
+  const sourceStats = Array.from(sourceMap.entries())
+    .map(([k, v]) => ({ source: k, label: ComplaintSourceLabels[k], count: v }))
     .filter((m) => m.count > 0)
     .sort((a, b) => b.count - a.count)
 
@@ -301,7 +301,7 @@ export function buildComplaintReportSnapshot(
     pending,
     closedCount,
     closedRate,
-    methodStats,
+    sourceStats,
     categoryStats,
     regionStats,
     statusStats,

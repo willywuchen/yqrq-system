@@ -75,6 +75,7 @@ export interface TrainingMaterial {
   audioDuration?: number // 秒，上传后自动读取
   attachments: Attachment[] // ≤5 个，单个 ≤20MB
   source?: string // 资料来源，如"文化和旅游部官网"
+  isPublicToAgency: boolean // 是否向涉旅企业公开：开启后旅行社（涉旅企业）角色才可见该资料
   status: TrainingMaterialStatus
   isTop: boolean
   viewCount: number
@@ -85,7 +86,7 @@ export interface TrainingMaterial {
   updateTime?: string
 }
 
-// 可管理学习培训资料的角色（省文旅厅 + 系统管理员）
+// 可管理学习培训资料的角色（文旅厅 + 系统管理员）
 export const TRAINING_MANAGER_ROLES: UserRole[] = ['final_reviewer', 'admin']
 
 export function isTrainingManagerRole(role: UserRole): boolean {

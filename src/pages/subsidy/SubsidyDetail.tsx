@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Alert,
   Button,
@@ -11,7 +11,6 @@ import {
   Tag,
   Tabs,
   Typography,
-  Tooltip,
   Divider,
   Statistic,
 } from 'antd'
@@ -19,9 +18,7 @@ import {
   ArrowLeftOutlined,
   EditOutlined,
   ExportOutlined,
-  ClockCircleOutlined,
   InfoCircleOutlined,
-  LockOutlined,
   TeamOutlined,
   CalendarOutlined,
   EnvironmentOutlined,
@@ -38,50 +35,18 @@ import {
   SubsidyRewardMajorColors,
   SubsidyRewardMajorLabels,
   getDeclaredRewardMajors,
-  type SubsidyApplication,
-  type SubsidyStatus,
   type RewardMajor,
 } from '../../types'
 import { formatMoney, maskIdNumber, maskPhone } from '../../utils'
 
 const { Text } = Typography
 
-function checkLocked(app: SubsidyApplication): boolean {
-  if (app.status === 'locked') return true
-  const deadline = new Date(app.lockDeadline.replace(/-/g, '/')).getTime()
-  return Date.now() >= deadline
-}
-
-function useCountdown(lockDeadline: string, status: SubsidyStatus) {
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (status === 'locked') return
-    const t = setInterval(() => setTick((v) => v + 1), 60 * 1000)
-    return () => clearInterval(t)
-  }, [status])
-
-  if (status === 'locked') return { text: '已锁定', color: 'red' }
-  const deadline = new Date(lockDeadline.replace(/-/g, '/')).getTime()
-  const diff = deadline - Date.now()
-  if (diff <= 0) return { text: '已锁定', color: 'red' }
-  const days = Math.floor(diff / (24 * 3600 * 1000))
-  const hours = Math.floor((diff % (24 * 3600 * 1000)) / (3600 * 1000))
-  const minutes = Math.floor((diff % (3600 * 1000)) / (60 * 1000))
-  if (days >= 1) return { text: `${days}天${hours}小时`, color: 'default' }
-  if (hours >= 1) return { text: `${hours}小时${minutes}分`, color: 'orange' }
-  return { text: `${minutes}分钟`, color: 'red' }
-}
-
 export default function SubsidyDetail() {
   const navigate = useNavigate()
   const params = useParams()
   const id = params.id
-  const { subsidyApplications, currentUser, refreshSubsidyLockStatus } = useStore()
+  const { subsidyApplications, currentUser } = useStore()
   const [exportOpen, setExportOpen] = useState(false)
-
-  useEffect(() => {
-    refreshSubsidyLockStatus()
-  }, [refreshSubsidyLockStatus])
 
   const app = subsidyApplications.find((a) => a.id === id)
 
@@ -98,10 +63,8 @@ export default function SubsidyDetail() {
     )
   }
 
-  const isLocked = checkLocked(app)
   const isApplicant = currentUser.role === 'applicant'
-  const canEdit = isApplicant && !isLocked && app.status !== 'locked'
-  const countdown = useCountdown(app.lockDeadline, app.status)
+  const canEdit = isApplicant
 
   const s = app.teamPresetSnapshot
   const bi = app.teamBaseInfo
@@ -196,9 +159,9 @@ export default function SubsidyDetail() {
         }
       >
         <Alert
-          type={canEdit ? 'info' : 'warning'}
+          type="info"
           showIcon
-          icon={canEdit ? <InfoCircleOutlined /> : <LockOutlined />}
+          icon={<InfoCircleOutlined />}
           message={
             <Space wrap>
               <span><HomeOutlined /> 申报单位：{app.createdByOrg}</span>
@@ -219,14 +182,6 @@ export default function SubsidyDetail() {
               </span>
               <Divider type="vertical" />
               <span><CalendarOutlined /> 出团日期：{s.travelStart}</span>
-              <Divider type="vertical" />
-              <span>锁定时间：{app.lockDeadline}</span>
-              <Divider type="vertical" />
-              <Tooltip title="行程结束日 24:00 前可修改（行程结束当日仍可修改）">
-                <Tag color={countdown.color} icon={<ClockCircleOutlined />}>
-                  剩余可修改：{countdown.text}
-                </Tag>
-              </Tooltip>
             </Space>
           }
           style={{ marginBottom: 16 }}

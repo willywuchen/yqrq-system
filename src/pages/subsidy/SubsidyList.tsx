@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Button,
   Card,
@@ -9,7 +9,6 @@ import {
   Table,
   Tag,
   App,
-  Tooltip,
   Row,
   Col,
   Statistic,
@@ -20,8 +19,6 @@ import {
   EditOutlined,
   DeleteOutlined,
   ExportOutlined,
-  ClockCircleOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -41,35 +38,9 @@ import { formatMoney } from '../../utils'
 
 const { RangePicker } = DatePicker
 
-// 计算剩余锁定时间描述
-function getLockCountdown(lockDeadline: string, status: SubsidyStatus): { text: string; color: string } | null {
-  if (status === 'locked') return { text: '已锁定', color: 'red' }
-  if (status === 'draft') return null // 草稿态不展示倒计时
-  const deadline = new Date(lockDeadline.replace(/-/g, '/')).getTime()
-  const now = Date.now()
-  if (now >= deadline) return { text: '已锁定', color: 'red' }
-  const diff = deadline - now
-  const days = Math.floor(diff / (24 * 3600 * 1000))
-  const hours = Math.floor((diff % (24 * 3600 * 1000)) / (3600 * 1000))
-  const minutes = Math.floor((diff % (3600 * 1000)) / (60 * 1000))
-  let text: string
-  let color: string
-  if (days >= 1) {
-    text = `${days}天${hours}小时`
-    color = 'default'
-  } else if (hours >= 1) {
-    text = `${hours}小时${minutes}分钟`
-    color = 'orange'
-  } else {
-    text = `${minutes}分钟`
-    color = 'red'
-  }
-  return { text, color }
-}
-
 export default function SubsidyList() {
   const navigate = useNavigate()
-  const { subsidyApplications, currentUser, deleteSubsidyApplication, appendSubsidyLog, refreshSubsidyLockStatus } = useStore()
+  const { subsidyApplications, currentUser, deleteSubsidyApplication, appendSubsidyLog } = useStore()
   const { modal, message } = App.useApp()
 
   const [statusFilter, setStatusFilter] = useState<SubsidyStatus | ''>('')
@@ -78,13 +49,8 @@ export default function SubsidyList() {
   const [keyword, setKeyword] = useState('')
   const [orgFilter, setOrgFilter] = useState('')
 
-  // 进入页面时刷新锁定状态
-  useEffect(() => {
-    refreshSubsidyLockStatus()
-  }, [refreshSubsidyLockStatus])
-
   const isApplicant = currentUser.role === 'applicant'
-  // 厅侧查看视角：终审员与第三方审核均可见全量已提交记录（草稿不可见）
+  // 厅侧查看视角：文旅厅与第三方查验均可见全量已提交记录（草稿不可见）
   const canViewAll = currentUser.role === 'final_reviewer' || currentUser.role === 'third_party_reviewer'
 
   // 数据范围过滤：旅行社仅本单位；厅侧查看角色全量已提交
@@ -93,7 +59,7 @@ export default function SubsidyList() {
     if (isApplicant) {
       list = list.filter((a) => a.createdByOrg === currentUser.org)
     } else if (canViewAll) {
-      // 终审员/第三方审核仅可见已提交和已锁定的记录（草稿不可见）
+      // 文旅厅/第三方查验仅可见已提交的记录（草稿不可见）
       list = list.filter((a) => a.status !== 'draft')
     } else {
       list = []
@@ -135,9 +101,8 @@ export default function SubsidyList() {
   const stats = useMemo(() => {
     const draftCnt = visibleApps.filter((a) => a.status === 'draft').length
     const submittedCnt = visibleApps.filter((a) => a.status === 'submitted').length
-    const lockedCnt = visibleApps.filter((a) => a.status === 'locked').length
     const totalAmount = visibleApps.reduce((s, a) => s + (a.totalAmount || 0), 0)
-    return { draftCnt, submittedCnt, lockedCnt, totalAmount }
+    return { draftCnt, submittedCnt, totalAmount }
   }, [visibleApps])
 
   const handleDelete = (record: SubsidyApplication) => {
@@ -256,20 +221,6 @@ export default function SubsidyList() {
       render: (v: SubsidyStatus) => <Tag color={SubsidyStatusColors[v]}>{SubsidyStatusLabels[v]}</Tag>,
     },
     {
-      title: '锁定倒计时',
-      key: 'lockCountdown',
-      width: 130,
-      render: (_: unknown, record: SubsidyApplication) => {
-        const cd = getLockCountdown(record.lockDeadline, record.status)
-        if (!cd) return <span style={{ color: '#999' }}>-</span>
-        return (
-          <Tooltip title={`锁定时间：${record.lockDeadline}`}>
-            <Tag color={cd.color} icon={<ClockCircleOutlined />}>{cd.text}</Tag>
-          </Tooltip>
-        )
-      },
-    },
-    {
       title: '提交时间',
       dataIndex: 'submitTime',
       width: 160,
@@ -281,14 +232,13 @@ export default function SubsidyList() {
       width: 200,
       fixed: 'right' as const,
       render: (_: unknown, record: SubsidyApplication) => {
-        const canEdit = isApplicant && record.status !== 'locked'
         const canDelete = isApplicant && record.status === 'draft'
         return (
           <Space size="small">
             <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/subsidy/${record.id}`)}>
               查看
             </Button>
-            {canEdit && (
+            {isApplicant && (
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/subsidy/${record.id}/edit`)}>
                 编辑
               </Button>
@@ -328,22 +278,17 @@ export default function SubsidyList() {
         }
       >
         <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={6}>
+          <Col span={8}>
             <Card size="small">
               <Statistic title="草稿" value={stats.draftCnt} suffix="条" valueStyle={{ color: '#8c8c8c' }} />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col span={8}>
             <Card size="small">
               <Statistic title="已提交" value={stats.submittedCnt} suffix="条" valueStyle={{ color: '#1677ff' }} />
             </Card>
           </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic title="已锁定" value={stats.lockedCnt} suffix="条" valueStyle={{ color: '#cf1322' }} />
-            </Card>
-          </Col>
-          <Col span={6}>
+          <Col span={8}>
             <Card size="small">
               <Statistic
                 title="申请奖励合计"
@@ -404,16 +349,13 @@ export default function SubsidyList() {
               onChange={(v) => setDateRange(v as any)}
               placeholder={['出团开始', '出团结束']}
             />
-            <Button icon={<ReloadOutlined />} onClick={() => refreshSubsidyLockStatus()}>
-              刷新锁定状态
-            </Button>
           </Space>
 
           <Table
             rowKey="id"
             dataSource={filteredApps}
             columns={columns}
-            scroll={{ x: 2080 }}
+            scroll={{ x: 1950 }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,

@@ -170,8 +170,8 @@ export const UserRoleLabels: Record<UserRole, string> = {
   applicant: '旅行社',
   initial_reviewer: '第三方初审员',
   review_reviewer: '市州复审员',
-  final_reviewer: '省文旅厅',
-  third_party_reviewer: '第三方审核',
+  final_reviewer: '文旅厅',
+  third_party_reviewer: '第三方查验',
   admin: '系统管理员',
 };
 
@@ -381,15 +381,18 @@ export const POLICY_CONSTANTS = {
 };
 
 // ========== 投诉台账 ==========
-export type ComplaintMethod =
+// 投诉来源
+export type ComplaintSource =
   | 'hotline_12345'
-  | 'phone'
-  | 'online_platform';
+  | 'national_platform'
+  | 'province_phone'
+  | 'letter_visit';
 
-export const ComplaintMethodLabels: Record<ComplaintMethod, string> = {
+export const ComplaintSourceLabels: Record<ComplaintSource, string> = {
   hotline_12345: '12345热线',
-  phone: '来电',
-  online_platform: '监管平台',
+  national_platform: '全国文化市场技术监督与服务平台',
+  province_phone: '省级电话投诉',
+  letter_visit: '来信来访',
 };
 
 export type TourismCategory =
@@ -454,9 +457,6 @@ export const ReplyStatusLabels: Record<ReplyStatus, string> = {
   closed: '已办结',
 };
 
-// 表单与导入模板可录的回复状态（已办结仅保留用于历史数据展示）
-export const FORM_REPLY_STATUS_KEYS: ReplyStatus[] = ['none', 'replied'];
-
 export interface ComplaintOperationLog {
   id: string;
   operator: string;
@@ -471,7 +471,7 @@ export interface Complaint {
   province: string;
   city: string;
   district?: string;
-  complaintMethod: ComplaintMethod;
+  complaintSource: ComplaintSource;
   tourismCategory: TourismCategory;
   complaintTime: string;
   status: ComplaintStatus;
@@ -615,7 +615,7 @@ export interface ComplaintReportSnapshot {
   pending: number
   closedCount: number
   closedRate: number
-  methodStats: { method: string; label: string; count: number }[]
+  sourceStats: { source: string; label: string; count: number }[]
   categoryStats: { category: string; label: string; count: number }[]
   regionStats: { name: string; count: number }[]
   statusStats: { status: string; label: string; count: number }[]
@@ -914,20 +914,18 @@ export interface OpinionReport {
   createdBy: string;
 }
 
-// ========== 引客入黔补贴管理（简化版，无审核流程） ==========
-// 状态机：DRAFT → SUBMITTED → LOCKED
-export type SubsidyStatus = 'draft' | 'submitted' | 'locked';
+// ========== 引客入黔补贴管理（简化版，无审核流程，已取消锁定机制） ==========
+// 状态机：DRAFT → SUBMITTED
+export type SubsidyStatus = 'draft' | 'submitted';
 
 export const SubsidyStatusLabels: Record<SubsidyStatus, string> = {
   draft: '草稿',
   submitted: '已提交',
-  locked: '已锁定',
 };
 
 export const SubsidyStatusColors: Record<SubsidyStatus, string> = {
   draft: 'default',
   submitted: 'blue',
-  locked: 'red',
 };
 
 // 区块B：入境旅游团队接待奖励申报行项
@@ -1043,8 +1041,6 @@ export interface SubsidyApplication {
   createTime: string;
   updateTime: string;
   submitTime?: string;
-  // 锁定截止时间：行程结束日当日 23:59:59（行程结束当日仍可修改，次日 00:00 锁定）
-  lockDeadline: string;
 
   // 创建人
   createdBy: string;
@@ -1057,7 +1053,7 @@ export interface SubsidyOperationLog {
   applicationId: string;
   operator: string;
   operatorRole: UserRole;
-  action: 'create' | 'edit' | 'submit' | 'withdraw' | 'lock' | 'export_team' | 'export_form' | 'delete';
+  action: 'create' | 'edit' | 'submit' | 'withdraw' | 'export_team' | 'export_form' | 'delete';
   comment?: string;
   time: string;
 }
@@ -1067,7 +1063,6 @@ export const SubsidyActionLabels: Record<SubsidyOperationLog['action'], string> 
   edit: '编辑',
   submit: '提交',
   withdraw: '撤回',
-  lock: '锁定',
   export_team: '导出团行程信息',
   export_form: '导出申报表',
   delete: '删除',

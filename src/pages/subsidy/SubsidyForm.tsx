@@ -18,7 +18,6 @@ import {
   Tabs,
   App,
   Typography,
-  Tooltip,
   Statistic,
 } from 'antd'
 import {
@@ -26,10 +25,8 @@ import {
   SaveOutlined,
   SendOutlined,
   UndoOutlined,
-  ClockCircleOutlined,
   InfoCircleOutlined,
   ReloadOutlined,
-  LockOutlined,
   PlusOutlined,
   DeleteOutlined,
 } from '@ant-design/icons'
@@ -47,34 +44,6 @@ import {
 import { formatMoney, maskIdNumber, maskPhone, nowStr } from '../../utils'
 
 const { Text } = Typography
-
-// 锁定时间校验
-function checkLocked(app: SubsidyApplication): boolean {
-  if (app.status === 'locked') return true
-  const deadline = new Date(app.lockDeadline.replace(/-/g, '/')).getTime()
-  return Date.now() >= deadline
-}
-
-// 倒计时
-function useCountdown(lockDeadline: string, status: string) {
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (status === 'locked') return
-    const t = setInterval(() => setTick((v) => v + 1), 60 * 1000)
-    return () => clearInterval(t)
-  }, [status])
-
-  if (status === 'locked') return { text: '已锁定', color: 'red' }
-  const deadline = new Date(lockDeadline.replace(/-/g, '/')).getTime()
-  const diff = deadline - Date.now()
-  if (diff <= 0) return { text: '已锁定', color: 'red' }
-  const days = Math.floor(diff / (24 * 3600 * 1000))
-  const hours = Math.floor((diff % (24 * 3600 * 1000)) / (3600 * 1000))
-  const minutes = Math.floor((diff % (3600 * 1000)) / (60 * 1000))
-  if (days >= 1) return { text: `${days}天${hours}小时`, color: 'default' }
-  if (hours >= 1) return { text: `${hours}小时${minutes}分`, color: 'orange' }
-  return { text: `${minutes}分钟`, color: 'red' }
-}
 
 // 酒店星级格式：X星级或同等档次（X 为填写项，“星级或同等档次”为固定后缀）
 const HOTEL_STAR_SUFFIX = '星级或同等档次'
@@ -122,7 +91,6 @@ export default function SubsidyForm() {
     updateSubsidyApplication,
     appendSubsidyLog,
     currentUser,
-    refreshSubsidyLockStatus,
   } = useStore()
   const { modal, message } = App.useApp()
 
@@ -149,11 +117,6 @@ export default function SubsidyForm() {
     detectDeclaredMajor(editingApp),
   )
 
-  // 进入页面时刷新锁定状态
-  useEffect(() => {
-    refreshSubsidyLockStatus()
-  }, [refreshSubsidyLockStatus])
-
   // 当 store 中应用状态变化时同步本地
   useEffect(() => {
     if (editingApp && (!formValues || formValues.status !== editingApp.status)) {
@@ -175,9 +138,8 @@ export default function SubsidyForm() {
     )
   }
 
-  const isLocked = checkLocked(editingApp)
-  const canEdit = !isLocked && editingApp.status !== 'locked'
-  const countdown = useCountdown(editingApp.lockDeadline, editingApp.status)
+  // 已取消锁定机制：草稿与已提交状态均可随时编辑
+  const canEdit = true
 
   // 计算金额合计
   const totalAmount = useMemo(() => {
@@ -389,10 +351,6 @@ export default function SubsidyForm() {
 
   // 保存
   const handleSave = () => {
-    if (!canEdit) {
-      message.error('已过锁定时间，不可修改')
-      return
-    }
     const patch: Partial<SubsidyApplication> = {
       ...formValues,
       totalAmount,
@@ -413,10 +371,6 @@ export default function SubsidyForm() {
 
   // 提交
   const handleSubmit = () => {
-    if (!canEdit) {
-      message.error('已过锁定时间，不可提交')
-      return
-    }
     if (!formValues.unitName) {
       message.error('请填写单位名称')
       return
@@ -448,8 +402,7 @@ export default function SubsidyForm() {
       content: (
         <div>
           <p>申报奖励类别：<b>{selectedMajor ? MajorLabels[selectedMajor] : '-'}</b></p>
-          <p>提交后省文旅厅将可查看本申报记录。</p>
-          <p>行程结束日 24:00 前仍可修改（行程结束当日仍可修改，剩余：<b>{countdown.text}</b>）。</p>
+          <p>提交后文旅厅将可查看本申报记录。</p>
           <p>申请奖励合计：<b style={{ color: '#cf1322' }}>{formatMoney(totalAmount)}</b></p>
         </div>
       ),
@@ -457,11 +410,10 @@ export default function SubsidyForm() {
       cancelText: '取消',
       onOk: () => {
         const now = nowStr()
-        const newStatus = checkLocked(editingApp) ? 'locked' : 'submitted'
         updateSubsidyApplication(editingApp.id, {
           ...formValues,
           totalAmount,
-          status: newStatus,
+          status: 'submitted',
           submitTime: now,
           updateTime: now,
         })
@@ -471,7 +423,7 @@ export default function SubsidyForm() {
           operator: currentUser.name,
           operatorRole: currentUser.role,
           action: 'submit',
-          comment: newStatus === 'locked' ? '提交时已过锁定时间，自动锁定' : '提交申报',
+          comment: '提交申报',
           time: now,
         })
         message.success('提交成功')
@@ -482,14 +434,10 @@ export default function SubsidyForm() {
 
   // 撤回
   const handleWithdraw = () => {
-    if (!canEdit) {
-      message.error('已过锁定时间，不可撤回')
-      return
-    }
     modal.confirm({
       title: '确认撤回申报',
       icon: <UndoOutlined />,
-      content: '撤回后将回到草稿状态，省文旅厅将不可见。可在锁定时间前重新提交。',
+      content: '撤回后将回到草稿状态，文旅厅将不可见。可随时重新提交。',
       okText: '确认撤回',
       okType: 'danger',
       cancelText: '取消',
@@ -895,22 +843,14 @@ export default function SubsidyForm() {
         }
       >
         <Alert
-          type={canEdit ? 'info' : 'warning'}
+          type="info"
           showIcon
-          icon={canEdit ? <InfoCircleOutlined /> : <LockOutlined />}
+          icon={<InfoCircleOutlined />}
           message={
             <Space>
               <span>数据来源：团信息 [{editingApp.teamPresetSnapshot.teamName}]</span>
               <Divider type="vertical" />
               <span>出团日期：{editingApp.teamPresetSnapshot.travelStart}</span>
-              <Divider type="vertical" />
-              <span>锁定时间：{editingApp.lockDeadline}</span>
-              <Divider type="vertical" />
-              <Tooltip title="行程结束日 24:00 前可修改（行程结束当日仍可修改）">
-                <Tag color={countdown.color} icon={<ClockCircleOutlined />}>
-                  剩余可修改：{countdown.text}
-                </Tag>
-              </Tooltip>
             </Space>
           }
           style={{ marginBottom: 16 }}
@@ -1556,15 +1496,6 @@ export default function SubsidyForm() {
                     <Button icon={<UndoOutlined />} onClick={handleWithdraw}>
                       撤回
                     </Button>
-                  )}
-                  {isLocked && (
-                    <Alert
-                      type="error"
-                      showIcon
-                      icon={<LockOutlined />}
-                      message="已过锁定时间，不可修改"
-                      style={{ padding: '4px 12px' }}
-                    />
                   )}
                 </Space>
               </Col>

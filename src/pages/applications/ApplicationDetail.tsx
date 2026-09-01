@@ -185,7 +185,7 @@ export default function ApplicationDetail() {
     addMessage({
       id: genId('msg'),
       title: needsPreCheck ? '新申报待前置审核' : '新申报待审核',
-      content: `${app.applicantOrg} 提交了申报 ${app.id}，${needsPreCheck ? '等待省文旅厅前置审核' : '等待初审'}`,
+      content: `${app.applicantOrg} 提交了申报 ${app.id}，${needsPreCheck ? '等待文旅厅前置审核' : '等待初审'}`,
       type: 'audit',
       read: false,
       createTime: nowStr(),
@@ -416,7 +416,7 @@ export default function ApplicationDetail() {
     },
     {
       title: '终审',
-      description: currentUser.role === 'final_reviewer' ? '省文旅厅' : undefined,
+      description: currentUser.role === 'final_reviewer' ? '文旅厅' : undefined,
     },
   ]
 

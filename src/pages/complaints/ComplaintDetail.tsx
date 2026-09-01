@@ -6,9 +6,8 @@ import { useStore } from '../../store'
 import {
   ComplaintStatusLabels,
   ComplaintStatusColors,
-  ComplaintMethodLabels,
+  ComplaintSourceLabels,
   TourismCategoryLabels,
-  ReplyStatusLabels,
   type ComplaintStatus,
 } from '../../types'
 import { formatFileSize } from '../../utils'
@@ -113,8 +112,8 @@ export default function ComplaintDetail() {
             <Descriptions.Item label="投诉编号">{complaint.id}</Descriptions.Item>
             <Descriptions.Item label="投诉标题">{complaint.title}</Descriptions.Item>
             <Descriptions.Item label="所属区域">{region || '-'}</Descriptions.Item>
-            <Descriptions.Item label="投诉方式">
-              <Tag color="blue">{ComplaintMethodLabels[complaint.complaintMethod]}</Tag>
+            <Descriptions.Item label="投诉来源">
+              <Tag color="blue">{ComplaintSourceLabels[complaint.complaintSource]}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label="投诉类别">
               <Tag color="geekblue">{TourismCategoryLabels[complaint.tourismCategory]}</Tag>
@@ -181,17 +180,18 @@ export default function ComplaintDetail() {
             <Descriptions.Item label="负责人审核意见">
               {complaint.reviewerOpinion || '-'}
             </Descriptions.Item>
+            <Descriptions.Item label="是否转办">
+              {complaint.isTransferred ? <Tag color="purple">是</Tag> : <Tag>否</Tag>}
+            </Descriptions.Item>
+            <Descriptions.Item label="转办部门">
+              {complaint.isTransferred ? complaint.transferDepartment || '-' : '-'}
+            </Descriptions.Item>
           </Descriptions>
         </Card>
 
         {/* 回复情况 */}
         <Card title="回复情况" size="small" style={{ marginBottom: 16 }}>
           <Descriptions column={2} bordered size="small">
-            <Descriptions.Item label="回复状态">
-              <Tag color={complaint.replyStatus === 'closed' ? 'success' : complaint.replyStatus === 'replied' ? 'cyan' : 'default'}>
-                {ReplyStatusLabels[complaint.replyStatus]}
-              </Tag>
-            </Descriptions.Item>
             <Descriptions.Item label="回复时间">{complaint.replyTime || '-'}</Descriptions.Item>
             <Descriptions.Item label="回复内容" span={2}>
               {complaint.replyContent || '-'}

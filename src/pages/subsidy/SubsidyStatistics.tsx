@@ -436,7 +436,7 @@ function TouristQueryPanel({ apps }: { apps: SubsidyApplication[] }) {
 export default function SubsidyStatistics() {
   const { subsidyApplications } = useStore()
 
-  // 终审员可见：仅已提交 + 已锁定
+  // 文旅厅侧可见：仅已提交（草稿不可见）
   const visibleApps = useMemo(
     () => subsidyApplications.filter((a) => a.status !== 'draft'),
     [subsidyApplications],

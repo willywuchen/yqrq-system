@@ -161,8 +161,6 @@ interface AppState {
   updateSubsidyApplication: (id: string, patch: Partial<SubsidyApplication>) => void
   deleteSubsidyApplication: (id: string) => void
   appendSubsidyLog: (log: SubsidyOperationLog) => void
-  // 锁定时间检查（前端层面模拟定时任务）
-  refreshSubsidyLockStatus: () => void
 
   // ========== 投诉数据报表 ==========
   complaintReports: ComplaintReport[]
@@ -486,43 +484,6 @@ export const useStore = create<AppState>()(
         })),
       appendSubsidyLog: (log) =>
         set((state) => ({ subsidyOperationLogs: [...state.subsidyOperationLogs, log] })),
-      // 锁定时间检查（前端层面模拟定时任务）
-      // 调用时机：列表页加载、详情页加载、保存时校验
-      refreshSubsidyLockStatus: () => {
-        const now = Date.now()
-        set((state) => {
-          const apps = state.subsidyApplications.map((a) => {
-            if (a.status !== 'submitted') return a
-            const deadline = new Date(a.lockDeadline.replace(/-/g, '/')).getTime()
-            if (now >= deadline) {
-              return { ...a, status: 'locked' as const }
-            }
-            return a
-          })
-          // 收集本次新锁定的记录，生成锁定日志
-          const newlyLockedIds = apps
-            .filter((a, idx) =>
-              a.status === 'locked' &&
-              state.subsidyApplications[idx].status === 'submitted'
-            )
-            .map((a) => a.id)
-          const newLogs: SubsidyOperationLog[] = newlyLockedIds.map((id) => ({
-            id: `sol-auto-${id}-${Date.now()}`,
-            applicationId: id,
-            operator: '系统',
-            operatorRole: 'admin',
-            action: 'lock',
-            comment: '到达锁定时间，自动锁定',
-            time: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          }))
-          return {
-            subsidyApplications: apps,
-            subsidyOperationLogs: newLogs.length > 0
-              ? [...state.subsidyOperationLogs, ...newLogs]
-              : state.subsidyOperationLogs,
-          }
-        })
-      },
 
       // ========== 投诉数据报表 ==========
       complaintReports: MockComplaintReports,
@@ -741,7 +702,7 @@ export const useStore = create<AppState>()(
       name: 'yqrq-store',
       // 数据版本：当 mock 数据结构发生变化时递增
       // 版本不匹配时，对应模块数据会被重置为最新 mock 数据
-      version: 14,
+      version: 15,
       migrate: (persistedState: any, version) => {
         // 版本 < 2：补贴管理 mock 数据结构调整（团队接待奖励由9行合并为3行）
         if (version < 2) {
@@ -874,6 +835,15 @@ export const useStore = create<AppState>()(
             ...persistedState,
             subsidyApplications: deepClone(MockSubsidyApplications),
             subsidyOperationLogs: deepClone(MockSubsidyOperationLogs),
+          }
+        }
+        // 版本 < 15：投诉"投诉方式"改为"投诉来源"（枚举调整为 12345热线/全国文化市场技术监督与服务平台/
+        // 省级电话投诉/来信来访），文库资料新增"是否向涉旅企业公开"字段，重置投诉与文库数据
+        if (version < 15) {
+          persistedState = {
+            ...persistedState,
+            complaints: deepClone(MockComplaints),
+            trainingMaterials: deepClone(MockTrainingMaterials),
           }
         }
         return persistedState

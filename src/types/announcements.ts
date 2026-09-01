@@ -8,15 +8,15 @@ export type AnnouncementTarget = 'erp' | 'dept_account' | 'agency_user'
 
 export const AnnouncementTargetLabels: Record<AnnouncementTarget, string> = {
   erp: '旅行社ERP系统',
-  dept_account: '文旅监管平台·厅内账号',
-  agency_user: '文旅监管平台·旅行社账号',
+  dept_account: '文旅监管平台·监管账号',
+  agency_user: '文旅监管平台·涉旅企业账号',
 }
 
 // 列表 Tag 用的短标签
 export const AnnouncementTargetShortLabels: Record<AnnouncementTarget, string> = {
   erp: 'ERP系统',
-  dept_account: '厅内账号',
-  agency_user: '旅行社账号',
+  dept_account: '监管账号',
+  agency_user: '涉旅企业账号',
 }
 
 // 发布区域（三级单选，仅对旅行社侧对象生效，PRD §1.2/§2.3）

@@ -22,11 +22,11 @@ import type { Dayjs } from 'dayjs'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
 import {
-  ComplaintMethodLabels,
+  ComplaintSourceLabels,
   TourismCategoryLabels,
   ComplaintStatusLabels,
   type ComplaintStatus,
-  type ComplaintMethod,
+  type ComplaintSource,
   type TourismCategory,
   GUIZHOU_CITIES,
 } from '../../types'
@@ -46,7 +46,7 @@ const TIME_RANGE_OPTIONS = [
   { value: 'custom', label: '自定义' },
 ]
 
-// 投诉方式饼图配色
+// 投诉来源饼图配色
 const PIE_COLORS = [
   '#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#13c2c2',
   '#eb2f96', '#faad14', '#2f54eb', '#a0d911', '#f5222d',
@@ -367,13 +367,13 @@ export default function ComplaintDashboard() {
     return { total, pending, closedCount, closedRate }
   }, [filtered])
 
-  // ===== 投诉方式分布（饼图）=====
-  const methodStats = useMemo(() => {
-    const map = new Map<ComplaintMethod, number>()
-    Object.keys(ComplaintMethodLabels).forEach((k) => map.set(k as ComplaintMethod, 0))
-    filtered.forEach((c) => map.set(c.complaintMethod, (map.get(c.complaintMethod) || 0) + 1))
+  // ===== 投诉来源分布（饼图）=====
+  const sourceStats = useMemo(() => {
+    const map = new Map<ComplaintSource, number>()
+    Object.keys(ComplaintSourceLabels).forEach((k) => map.set(k as ComplaintSource, 0))
+    filtered.forEach((c) => map.set(c.complaintSource, (map.get(c.complaintSource) || 0) + 1))
     return Array.from(map.entries())
-      .map(([k, v], i) => ({ method: k, label: ComplaintMethodLabels[k], count: v, color: PIE_COLORS[i % PIE_COLORS.length] }))
+      .map(([k, v], i) => ({ source: k, label: ComplaintSourceLabels[k], count: v, color: PIE_COLORS[i % PIE_COLORS.length] }))
       .filter((item) => item.count > 0)
       .sort((a, b) => b.count - a.count)
   }, [filtered])
@@ -578,8 +578,8 @@ export default function ComplaintDashboard() {
         {/* Section 3 - 分布分析（4种不同可视化）*/}
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col span={12}>
-            <Card title="投诉方式分布" size="small" style={{ height: '100%' }}>
-              <PieChart data={methodStats} />
+            <Card title="投诉来源分布" size="small" style={{ height: '100%' }}>
+              <PieChart data={sourceStats} />
             </Card>
           </Col>
           <Col span={12}>

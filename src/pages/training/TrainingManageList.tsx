@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Card, Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { App, Button, Card, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { EditOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
@@ -39,6 +39,7 @@ export default function TrainingManageList() {
   const [category, setCategory] = useState<string>('all')
   const [level, setLevel] = useState<TrainingLevel | 'all'>('all')
   const [mediaType, setMediaType] = useState<TrainingMediaType | 'all'>('all')
+  const [publicFlag, setPublicFlag] = useState<'all' | 'public' | 'private'>('all')
   const [keyword, setKeyword] = useState('')
 
   const categoryName = (id: string) =>
@@ -61,6 +62,8 @@ export default function TrainingManageList() {
       if (category !== 'all' && m.categoryId !== category) return false
       if (level !== 'all' && m.level !== level) return false
       if (mediaType !== 'all' && m.mediaType !== mediaType) return false
+      if (publicFlag === 'public' && !m.isPublicToAgency) return false
+      if (publicFlag === 'private' && m.isPublicToAgency) return false
       if (kw) {
         const hit =
           m.title.toLowerCase().includes(kw) || (m.summary || '').toLowerCase().includes(kw)
@@ -68,7 +71,7 @@ export default function TrainingManageList() {
       }
       return true
     })
-  }, [sorted, status, category, level, mediaType, keyword])
+  }, [sorted, status, category, level, mediaType, publicFlag, keyword])
 
   // 发布前完整性校验：必填元数据 + 对应形式的内容（PRD §5.3 交互细节）
   const checkPublishable = (m: TrainingMaterial): string | null => {
@@ -96,14 +99,18 @@ export default function TrainingManageList() {
       updateBy: currentUser.name,
       updateTime: nowStr(),
     })
-    message.success('已发布，旅行社侧即时可见')
+    message.success(
+      m.isPublicToAgency
+        ? '已发布，涉旅企业侧即时可见'
+        : '已发布，未向涉旅企业公开、仅文旅厅内部可见',
+    )
   }
 
   const handleOffline = (m: TrainingMaterial) => {
     modal.confirm({
       title: '下架确认',
       content:
-        '下架后旅行社侧将无法查看该资料（历史链接打开显示已下架提示）。确认下架？',
+        '下架后涉旅企业侧将无法查看该资料（历史链接打开显示已下架提示）。确认下架？',
       okText: '确认下架',
       cancelText: '取消',
       onOk: () => {
@@ -112,7 +119,7 @@ export default function TrainingManageList() {
           updateBy: currentUser.name,
           updateTime: nowStr(),
         })
-        message.success('已下架，旅行社侧不再展示该资料')
+        message.success('已下架，涉旅企业侧不再展示该资料')
       },
     })
   }
@@ -165,6 +172,13 @@ export default function TrainingManageList() {
       render: (t: TrainingMediaType) => <MediaTypeTag mediaType={t} />,
     },
     {
+      title: '向涉旅企业公开',
+      dataIndex: 'isPublicToAgency',
+      width: 120,
+      render: (v: boolean) =>
+        v ? <Tag color="green">公开</Tag> : <Tag>不公开</Tag>,
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       width: 90,
@@ -207,14 +221,23 @@ export default function TrainingManageList() {
               下架
             </Button>
           )}
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => navigate(`/training/edit/${m.id}`)}
-          >
-            编辑
-          </Button>
+          {/* 已发布资料不可编辑：只能下架后编辑，再重新发布 */}
+          {m.status === 'published' ? (
+            <Tooltip title="已发布资料不可编辑，请先下架，编辑后重新发布">
+              <Button type="link" size="small" icon={<EditOutlined />} disabled>
+                编辑
+              </Button>
+            </Tooltip>
+          ) : (
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => navigate(`/training/edit/${m.id}`)}
+            >
+              编辑
+            </Button>
+          )}
           {(m.status === 'draft' || m.status === 'offline') && (
             <Button type="link" size="small" danger onClick={() => handleDelete(m)}>
               删除
@@ -287,6 +310,16 @@ export default function TrainingManageList() {
                   value: value as TrainingMediaType,
                   label,
                 })),
+              ]}
+            />
+            <Select
+              value={publicFlag}
+              style={{ width: 130 }}
+              onChange={setPublicFlag}
+              options={[
+                { value: 'all', label: '全部公开状态' },
+                { value: 'public', label: '向涉旅企业公开' },
+                { value: 'private', label: '不公开' },
               ]}
             />
             <Input

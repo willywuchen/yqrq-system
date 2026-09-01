@@ -43,16 +43,17 @@ export default function TrainingBrowseList() {
   const categoryName = (id: string) =>
     trainingCategories.find((c) => c.id === id)?.name || '未分类'
 
-  // 已发布资料；置顶优先，其次发布时间倒序
+  // 已发布且向涉旅企业公开的资料才对旅行社（涉旅企业）角色可见；文旅厅侧可见全部已发布资料
+  // 置顶优先，其次发布时间倒序
   const published = useMemo(
     () =>
       trainingMaterials
-        .filter((m) => m.status === 'published')
+        .filter((m) => m.status === 'published' && (isManager || m.isPublicToAgency))
         .sort((a, b) => {
           if (a.isTop !== b.isTop) return a.isTop ? -1 : 1
           return (b.publishTime || '').localeCompare(a.publishTime || '')
         }),
-    [trainingMaterials],
+    [trainingMaterials, isManager],
   )
 
   const categoryCount = (id: string) => published.filter((m) => m.categoryId === id).length

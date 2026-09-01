@@ -171,12 +171,14 @@ export const GUIZHOU_REGION_TREE: MockCity[] = [
 export const PROVINCE_REGION: AnnouncementRegion = { level: 'province', code: '520000', name: '贵州省' }
 
 // ========== 平台账号目录（接收对象 / 已读统计分母，静态目录不落 store） ==========
-// 厅内账号（对应角色：终审审核员 / 系统管理员；初/复审不参与本模块）
+// 监管账号（对应角色：终审审核员 / 系统管理员 + 各市州文旅局账号；初/复审不参与本模块）
 export interface MockDeptAccount {
   id: string
   name: string
   role: UserRole
   orgName: string
+  cityCode?: string // 所属市州编码；省级账号不填（可接收全省公告）
+  districtCode?: string // 所属区县编码；市州级账号不填
 }
 
 // 旅行社账号（MVP 用注册地 mock 演示，真实接入待账号体系补充，PRD §8 遗留跟进）
@@ -192,6 +194,16 @@ export interface MockAgencyAccount {
 export const MockDeptAccounts: MockDeptAccount[] = [
   { id: 'dept-chen', name: '陈华', role: 'final_reviewer', orgName: '贵州省文化和旅游厅' },
   { id: 'dept-admin', name: '管理员', role: 'admin', orgName: '贵州省文化和旅游厅' },
+  // 各市州文旅局监管账号（用于"监管账号按区域发布"演示；登录演示账号固定取首个省级账号）
+  { id: 'dept-guiyang', name: '周贵阳', role: 'final_reviewer', orgName: '贵阳市文化和旅游局', cityCode: '520100' },
+  { id: 'dept-zunyi', name: '何遵义', role: 'final_reviewer', orgName: '遵义市文化和旅游局', cityCode: '520300' },
+  { id: 'dept-anming', name: '吴安顺', role: 'final_reviewer', orgName: '安顺市文化和旅游局', cityCode: '520400' },
+  { id: 'dept-liupanshui', name: '龙六盘', role: 'final_reviewer', orgName: '六盘水市文化和旅游局', cityCode: '520200' },
+  { id: 'dept-bijie', name: '穆毕节', role: 'final_reviewer', orgName: '毕节市文化和旅游局', cityCode: '520500' },
+  { id: 'dept-tongren', name: '田铜仁', role: 'final_reviewer', orgName: '铜仁市文化和旅游局', cityCode: '520600' },
+  { id: 'dept-qianxinan', name: '岑黔西南', role: 'final_reviewer', orgName: '黔西南州文化广电和旅游局', cityCode: '522300' },
+  { id: 'dept-qiandongnan', name: '杨黔东南', role: 'final_reviewer', orgName: '黔东南州文体广电旅游局', cityCode: '522600' },
+  { id: 'dept-qiannan', name: '蒙黔南', role: 'final_reviewer', orgName: '黔南州文化广电和旅游局', cityCode: '522700' },
 ]
 
 export const MockAgencyAccounts: MockAgencyAccount[] = [
@@ -508,6 +520,13 @@ export function regionMatchAgency(region: AnnouncementRegion, agency: MockAgency
   return agency.districtCode === region.code
 }
 
+// 发布区域是否覆盖监管账号所属区域（省级账号可接收全省公告，市州账号仅接收所属区域公告）
+export function regionMatchDept(region: AnnouncementRegion, dept: MockDeptAccount): boolean {
+  if (region.level === 'province') return true
+  if (region.level === 'city') return dept.cityCode === region.code
+  return dept.districtCode === region.code
+}
+
 // 公告是否对当前用户可见（PRD §2.3：已发布 + 对象匹配 + 区域匹配）
 export function isVisibleToUser(
   announcement: Announcement,
@@ -520,12 +539,14 @@ export function isVisibleToUser(
     return !!agency && regionMatchAgency(announcement.region, agency)
   }
   if (user.role === 'final_reviewer' || user.role === 'admin') {
-    return announcement.targets.includes('dept_account')
+    if (!announcement.targets.includes('dept_account')) return false
+    const dept = MockDeptAccounts.find((a) => a.role === user.role)
+    return !!dept && regionMatchDept(announcement.region, dept)
   }
   return false // 初/复审不参与本模块
 }
 
-// 平台内目标账号（动态口径分母：厅内 + 区域内旅行社账号；ERP 仅计数提示，PRD §8 结论 7）
+// 平台内目标账号（动态口径分母：区域内监管账号 + 区域内涉旅企业账号；ERP 仅计数提示，PRD §8 结论 7）
 export interface TargetAccount {
   id: string
   name: string
@@ -537,7 +558,9 @@ export function buildTargetAccounts(announcement: Announcement): TargetAccount[]
   const result: TargetAccount[] = []
   if (announcement.targets.includes('dept_account')) {
     for (const d of MockDeptAccounts) {
-      result.push({ id: d.id, name: d.name, userType: 'dept', orgName: d.orgName })
+      if (regionMatchDept(announcement.region, d)) {
+        result.push({ id: d.id, name: d.name, userType: 'dept', orgName: d.orgName })
+      }
     }
   }
   if (announcement.targets.includes('agency_user')) {
@@ -637,5 +660,5 @@ export function regionToCascader(region: AnnouncementRegion): string[] {
 
 // 发布对象短标签组合（列表 Tag 用）
 export function targetShortText(targets: AnnouncementTarget[]): string {
-  return targets.map((t) => ({ erp: 'ERP系统', dept_account: '厅内账号', agency_user: '旅行社账号' })[t]).join('、')
+  return targets.map((t) => ({ erp: 'ERP系统', dept_account: '监管账号', agency_user: '涉旅企业账号' })[t]).join('、')
 }

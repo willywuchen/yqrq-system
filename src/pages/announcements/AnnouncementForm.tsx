@@ -31,10 +31,12 @@ import {
 import {
   GUIZHOU_REGION_TREE,
   MockAgencyAccounts,
+  MockDeptAccounts,
   PROVINCE_REGION,
   regionFromCascader,
   regionLabel,
   regionMatchAgency,
+  regionMatchDept,
   regionToCascader,
 } from '../../mock/announcements'
 import type { Attachment } from '../../types'
@@ -152,6 +154,22 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
 
   const editingStatus = editing?.status
 
+  // 已发布公告不允许编辑：只能下架后编辑，再重新发布
+  if (mode === 'edit' && editingStatus === 'published') {
+    return (
+      <Result
+        status="info"
+        title="该公告已发布，不可编辑"
+        subTitle="如需修改内容，请先在公告管理列表将其下架，下架后编辑并重新发布"
+        extra={
+          <Button type="primary" onClick={() => navigate('/announcements')}>
+            返回公告管理
+          </Button>
+        }
+      />
+    )
+  }
+
   // 分类选项：启用中的分类；编辑时所属分类已停用则额外带入并标注
   const enabledCategories = [...announcementCategories]
     .filter((c) => c.status === 'enabled')
@@ -169,11 +187,16 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
     (a) => a.isTop && a.id !== editing?.id && a.status === 'published',
   ).length
 
-  // 区域字段仅在发布对象含旅行社侧（ERP 或旅行社账号）时可编辑（PRD §5.2）
-  const regionEditable = targets.includes('agency_user') || targets.includes('erp')
+  // 区域字段在发布对象含监管账号或旅行社侧（ERP 或涉旅企业账号）时可编辑；
+  // 监管账号也可按区域发布至不同地区的文旅账号
+  const regionEditable =
+    targets.includes('dept_account') || targets.includes('agency_user') || targets.includes('erp')
   const currentRegion = regionFromCascader(regionPath)
   const regionAgencyCount = regionEditable
     ? MockAgencyAccounts.filter((a) => regionMatchAgency(currentRegion, a)).length
+    : 0
+  const regionDeptCount = regionEditable
+    ? MockDeptAccounts.filter((d) => regionMatchDept(currentRegion, d)).length
     : 0
 
   const handleCoverFile = async (file: File) => {
@@ -288,11 +311,9 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
     message.success(
       willPublish
         ? '已发布，目标账号即时可见'
-        : nextStatus === 'published'
-          ? '修改已保存并即时生效'
-          : nextStatus === 'offline'
-            ? '已保存，公告仍为已下架状态'
-            : '已保存为草稿，可在管理列表继续编辑',
+        : nextStatus === 'offline'
+          ? '已保存，公告仍为已下架状态'
+          : '已保存为草稿，可在管理列表继续编辑',
     )
     navigate('/announcements')
   }
@@ -311,8 +332,7 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
     }
   }
 
-  const saveButtonLabel =
-    editingStatus === 'published' || editingStatus === 'offline' ? '保 存' : '保存为草稿'
+  const saveButtonLabel = editingStatus === 'offline' ? '保 存' : '保存为草稿'
 
   return (
     <>
@@ -326,14 +346,6 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
         ]}
       />
       <PageContainer>
-        {editingStatus === 'published' && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="该公告已发布，保存后修改即时对目标账号生效；已读记录保留不清零"
-          />
-        )}
         {editingStatus === 'offline' && (
           <Alert
             type="info"
@@ -508,8 +520,8 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
               required={regionEditable}
               help={
                 regionEditable
-                  ? `当前区域已注册旅行社 ${regionAgencyCount} 家；仅对旅行社侧对象生效，按注册地匹配`
-                  : '仅发布给厅内账号时无需选择区域'
+                  ? `当前区域有 ${regionDeptCount} 个监管账号、${regionAgencyCount} 家旅行社；按账号所属区域匹配，全省区域覆盖全部账号`
+                  : '请先选择发布对象后再选择发布区域'
               }
             >
               <Cascader

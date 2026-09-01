@@ -63,7 +63,7 @@ export default function ReadStatsDrawer({ open, onClose, announcement }: Props) 
       dataIndex: 'userType',
       width: 90,
       render: (t: 'dept' | 'agency') =>
-        t === 'dept' ? <Tag color="geekblue">厅内账号</Tag> : <Tag color="green">旅行社</Tag>,
+        t === 'dept' ? <Tag color="geekblue">监管账号</Tag> : <Tag color="green">涉旅企业账号</Tag>,
     },
     { title: '所属', dataIndex: 'orgName', ellipsis: true },
   ]

@@ -34,53 +34,39 @@ import { useStore } from '../../store'
 import {
   ComplaintStatusLabels,
   ComplaintStatusColors,
-  ComplaintMethodLabels,
+  ComplaintSourceLabels,
   TourismCategoryLabels,
-  ReplyStatusLabels,
-  FORM_REPLY_STATUS_KEYS,
   GUIZHOU_CITIES,
   GUIZHOU_DISTRICTS,
   GUIZHOU_REGION_OPTIONS,
   type ComplaintStatus,
-  type ComplaintMethod,
+  type ComplaintSource,
   type TourismCategory,
-  type ReplyStatus,
   type Complaint,
 } from '../../types'
 import { nowStr } from '../../utils'
 
 const { RangePicker } = DatePicker
 
-// 回复状态颜色映射
-const ReplyStatusColors: Record<ReplyStatus, string> = {
-  none: 'default',
-  replied: 'cyan',
-  closed: 'success',
-}
-
 // ===== Excel 导入 =====
 // 导入模板列名（与手动新增表单字段一致；区域级联拆分为 省/市州/区县 三列填写）
 const IMPORT_HEADERS = [
-  '投诉标题', '所属省份', '所属市州', '区/县', '投诉方式', '投诉类别', '投诉时间',
+  '投诉标题', '所属省份', '所属市州', '区/县', '投诉来源', '投诉类别', '投诉时间',
   '投诉人姓名', '投诉人性别', '投诉人电话', '投诉人邮箱', '投诉人地址', '合同日期',
   '被投诉人名称', '被投诉人电话', '被投诉人地址', '投诉内容', '投诉请求',
   '投诉办理人员意见', '负责人审核意见', '是否转办', '转办部门',
-  '回复状态', '回复时间', '回复内容', '备注', '办理状态',
+  '回复时间', '回复内容', '备注', '办理状态',
 ] as const
 
 // 枚举字段：允许填中文标签或英文标识
-const COMPLAINT_METHOD_MAP: Record<string, ComplaintMethod> = Object.fromEntries(
-  Object.entries(ComplaintMethodLabels).map(([k, v]) => [v, k as ComplaintMethod]),
+const COMPLAINT_SOURCE_MAP: Record<string, ComplaintSource> = Object.fromEntries(
+  Object.entries(ComplaintSourceLabels).map(([k, v]) => [v, k as ComplaintSource]),
 )
 const COMPLAINT_CATEGORY_MAP: Record<string, TourismCategory> = Object.fromEntries(
   Object.entries(TourismCategoryLabels).map(([k, v]) => [v, k as TourismCategory]),
 )
 const COMPLAINT_STATUS_MAP: Record<string, ComplaintStatus> = Object.fromEntries(
   Object.entries(ComplaintStatusLabels).map(([k, v]) => [v, k as ComplaintStatus]),
-)
-// 回复状态：导入仅允许 未回复/已回复（已办结只保留展示历史数据）
-const REPLY_STATUS_MAP: Record<string, ReplyStatus> = Object.fromEntries(
-  FORM_REPLY_STATUS_KEYS.map((k) => [ReplyStatusLabels[k], k]),
 )
 const GENDER_MAP: Record<string, 'male' | 'female' | 'unknown'> = {
   '男': 'male',
@@ -127,7 +113,7 @@ export default function ComplaintList() {
   // 查询条件
   const [titleKeyword, setTitleKeyword] = useState('')
   const [region, setRegion] = useState<string[]>([])
-  const [complaintMethod, setComplaintMethod] = useState<ComplaintMethod | undefined>()
+  const [complaintSource, setComplaintSource] = useState<ComplaintSource | undefined>()
   const [tourismCategory, setTourismCategory] = useState<TourismCategory | undefined>()
   const [status, setStatus] = useState<ComplaintStatus | undefined>()
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null)
@@ -155,7 +141,7 @@ export default function ComplaintList() {
         if (region[1] && c.city !== region[1]) return false
         if (region[2] && c.district !== region[2]) return false
       }
-      if (complaintMethod && c.complaintMethod !== complaintMethod) return false
+      if (complaintSource && c.complaintSource !== complaintSource) return false
       if (tourismCategory && c.tourismCategory !== tourismCategory) return false
       if (status && c.status !== status) return false
       if (dateRange && dateRange[0] && dateRange[1]) {
@@ -180,7 +166,7 @@ export default function ComplaintList() {
     complaints,
     titleKeyword,
     region,
-    complaintMethod,
+    complaintSource,
     tourismCategory,
     status,
     dateRange,
@@ -191,7 +177,7 @@ export default function ComplaintList() {
   const handleReset = () => {
     setTitleKeyword('')
     setRegion([])
-    setComplaintMethod(undefined)
+    setComplaintSource(undefined)
     setTourismCategory(undefined)
     setStatus(undefined)
     setDateRange(null)
@@ -225,7 +211,7 @@ export default function ComplaintList() {
       '省',
       '市',
       '区县',
-      '投诉方式',
+      '投诉来源',
       '投诉类别',
       '投诉时间',
       '投诉人',
@@ -233,7 +219,6 @@ export default function ComplaintList() {
       '被投诉人',
       '被投诉人电话',
       '状态',
-      '回复状态',
       '回复时间',
       '创建人',
       '创建时间',
@@ -244,7 +229,7 @@ export default function ComplaintList() {
       c.province,
       c.city,
       c.district || '',
-      ComplaintMethodLabels[c.complaintMethod],
+      ComplaintSourceLabels[c.complaintSource],
       TourismCategoryLabels[c.tourismCategory],
       c.complaintTime,
       c.complainant.name,
@@ -252,7 +237,6 @@ export default function ComplaintList() {
       c.respondent.name,
       c.respondent.phone || '',
       ComplaintStatusLabels[c.status],
-      ReplyStatusLabels[c.replyStatus],
       c.replyTime || '',
       c.createdBy,
       c.createTime,
@@ -300,7 +284,6 @@ export default function ComplaintList() {
       '同意办理意见，请跟进回复。',
       '否',
       '',
-      '已回复',
       '2026-08-22',
       '已协调旅行社退还相关费用，投诉人表示满意。',
       '示例数据，导入前请删除本行',
@@ -314,7 +297,7 @@ export default function ComplaintList() {
       ['所属省份', '是', '固定填：贵州省（留空时默认贵州省）'],
       ['所属市州', '是', `可选值：${GUIZHOU_CITIES.join('、')}`],
       ['区/县', '否', `须为所选市州下辖区县，如：${GUIZHOU_DISTRICTS[GUIZHOU_CITIES[0]].slice(0, 3).join('、')}等`],
-      ['投诉方式', '是', `可选值：${Object.values(ComplaintMethodLabels).join('、')}`],
+      ['投诉来源', '是', `可选值：${Object.values(ComplaintSourceLabels).join('、')}`],
       ['投诉类别', '是', `可选值：${Object.values(TourismCategoryLabels).join('、')}`],
       ['投诉时间', '是', '格式：2026-08-20'],
       ['投诉人姓名', '是', '不超过50字符'],
@@ -332,7 +315,6 @@ export default function ComplaintList() {
       ['负责人审核意见', '否', '负责人审核意见'],
       ['是否转办', '否', '可选值：是、否，默认为"否"'],
       ['转办部门', '否', '是否转办为"是"时必填，如：贵阳市文化和旅游局'],
-      ['回复状态', '否', `可选值：${FORM_REPLY_STATUS_KEYS.map((k) => ReplyStatusLabels[k]).join('、')}，默认为"未回复"`],
       ['回复时间', '否', '格式：2026-08-22'],
       ['回复内容', '否', '回复投诉人的内容'],
       ['备注', '否', '备注信息'],
@@ -405,10 +387,10 @@ export default function ComplaintList() {
           }
 
           // 枚举字段映射
-          const rawMethod = get('投诉方式')
-          const methodVal = resolveEnum(COMPLAINT_METHOD_MAP, Object.keys(ComplaintMethodLabels), rawMethod)
-          if (!rawMethod) problems.push('投诉方式不能为空')
-          else if (!methodVal) problems.push(`投诉方式须为：${Object.values(ComplaintMethodLabels).join('、')}`)
+          const rawMethod = get('投诉来源')
+          const methodVal = resolveEnum(COMPLAINT_SOURCE_MAP, Object.keys(ComplaintSourceLabels), rawMethod)
+          if (!rawMethod) problems.push('投诉来源不能为空')
+          else if (!methodVal) problems.push(`投诉来源须为：${Object.values(ComplaintSourceLabels).join('、')}`)
 
           const rawCategory = get('投诉类别')
           const categoryVal = resolveEnum(COMPLAINT_CATEGORY_MAP, Object.keys(TourismCategoryLabels), rawCategory)
@@ -435,14 +417,6 @@ export default function ComplaintList() {
             : undefined
           if (rawStatus && !statusVal) {
             problems.push(`办理状态须为：${Object.values(ComplaintStatusLabels).join('、')}`)
-          }
-
-          const rawReplyStatus = get('回复状态')
-          const replyStatusVal = rawReplyStatus
-            ? resolveEnum(REPLY_STATUS_MAP, FORM_REPLY_STATUS_KEYS, rawReplyStatus)
-            : undefined
-          if (rawReplyStatus && !replyStatusVal) {
-            problems.push(`回复状态须为：${FORM_REPLY_STATUS_KEYS.map((k) => ReplyStatusLabels[k]).join('、')}`)
           }
 
           // 是否转办：空值默认"否"；转办时转办部门必填，不转办时忽略该列
@@ -474,7 +448,7 @@ export default function ComplaintList() {
             province,
             city,
             district: district || undefined,
-            complaintMethod: methodVal!,
+            complaintSource: methodVal!,
             tourismCategory: categoryVal!,
             complaintTime: complaintDayjs!.format('YYYY-MM-DD'),
             status: statusVal || 'pending',
@@ -498,7 +472,8 @@ export default function ComplaintList() {
             isTransferredToCase: false,
             isTransferred: transferVal,
             transferDepartment: transferVal ? transferDepartment : undefined,
-            replyStatus: replyStatusVal || 'none',
+            // 回复状态不再单独导入，随办理状态联动
+            replyStatus: statusVal === 'closed' ? 'closed' : statusVal === 'replied' ? 'replied' : 'none',
             replyTime: replyDayjs?.isValid() ? replyDayjs.format('YYYY-MM-DD') : undefined,
             replyContent: get('回复内容') || undefined,
             attachments: [],
@@ -576,10 +551,10 @@ export default function ComplaintList() {
         [r.province, r.city, r.district].filter(Boolean).join(' / ') || '-',
     },
     {
-      title: '投诉方式',
-      dataIndex: 'complaintMethod',
+      title: '投诉来源',
+      dataIndex: 'complaintSource',
       width: 120,
-      render: (m: ComplaintMethod) => <Tag>{ComplaintMethodLabels[m]}</Tag>,
+      render: (m: ComplaintSource) => <Tag>{ComplaintSourceLabels[m]}</Tag>,
     },
     {
       title: '投诉类别',
@@ -607,12 +582,6 @@ export default function ComplaintList() {
       render: (s: ComplaintStatus) => (
         <Tag color={ComplaintStatusColors[s]}>{ComplaintStatusLabels[s]}</Tag>
       ),
-    },
-    {
-      title: '回复状态',
-      dataIndex: 'replyStatus',
-      width: 100,
-      render: (s: ReplyStatus) => <Tag color={ReplyStatusColors[s]}>{ReplyStatusLabels[s]}</Tag>,
     },
     {
       title: '创建人',
@@ -702,14 +671,14 @@ export default function ComplaintList() {
                 options={GUIZHOU_REGION_OPTIONS}
               />
             </Form.Item>
-            <Form.Item name="complaintMethod">
+            <Form.Item name="complaintSource">
               <Select
-                placeholder="投诉方式"
-                value={complaintMethod}
-                onChange={setComplaintMethod}
+                placeholder="投诉来源"
+                value={complaintSource}
+                onChange={setComplaintSource}
                 allowClear
                 style={{ width: 150 }}
-                options={Object.entries(ComplaintMethodLabels).map(([k, v]) => ({ value: k, label: v }))}
+                options={Object.entries(ComplaintSourceLabels).map(([k, v]) => ({ value: k, label: v }))}
               />
             </Form.Item>
             <Form.Item name="tourismCategory">
@@ -768,7 +737,7 @@ export default function ComplaintList() {
           columns={columns}
           dataSource={filtered}
           rowKey="id"
-          scroll={{ x: 1800 }}
+          scroll={{ x: 1700 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

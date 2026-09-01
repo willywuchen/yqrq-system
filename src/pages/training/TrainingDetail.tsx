@@ -49,9 +49,12 @@ export default function TrainingDetail() {
     setMediaError(false)
   }, [material?.id])
 
-  // 非管理角色仅可查看已发布资料：草稿/已下架统一提示，不暴露存在性
+  // 非管理角色仅可查看"已发布且向涉旅企业公开"的资料：草稿/已下架/未公开统一提示，不暴露存在性
   function isManagerVisible() {
-    return !!material && (isManager || material.status === 'published')
+    return (
+      !!material &&
+      (isManager || (material.status === 'published' && material.isPublicToAgency))
+    )
   }
 
   if (!material) {
