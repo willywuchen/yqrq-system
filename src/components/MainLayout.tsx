@@ -112,7 +112,6 @@ const roleMenuMap: Record<UserRole, any[]> = {
       label: '引客入黔补贴管理',
       children: [
         { key: '/subsidy', icon: <FileTextOutlined />, label: '补贴申报列表' },
-        { key: '/subsidy/new', icon: <FileTextOutlined />, label: '新建补贴申报' },
       ],
     },
     // 文库查看（旅行社只读入口，PRD §2.3）
@@ -197,6 +196,17 @@ const roleMenuMap: Record<UserRole, any[]> = {
     trainingManageMenu,
     announcementManageMenu,
   ],
+  // 第三方审核：仅有补贴申报查看权限（只读视角，不含数据统计）
+  third_party_reviewer: [
+    {
+      key: 'subsidy-management',
+      icon: <GiftOutlined />,
+      label: '引客入黔补贴管理',
+      children: [
+        { key: '/subsidy', icon: <FileTextOutlined />, label: '补贴申报查看' },
+      ],
+    },
+  ],
   admin: [
     {
       key: 'reward-management',
@@ -253,6 +263,7 @@ const roleUsers: { role: UserRole; name: string; org?: string }[] = [
   { role: 'initial_reviewer', name: '王芳' },
   { role: 'review_reviewer', name: '刘强' },
   { role: 'final_reviewer', name: '陈华' },
+  { role: 'third_party_reviewer', name: '赵敏' },
   { role: 'admin', name: '管理员' },
 ]
 

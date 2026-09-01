@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Tabs,
   Table,
   Switch,
   Button,
@@ -24,47 +23,49 @@ import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
 import {
   ComplaintReportChapterKindLabels,
-  ComplaintReportTypeLabels,
   DEFAULT_REPORT_CHAPTERS,
   type ComplaintReportChapter,
-  type ComplaintReportTemplate,
-  type ComplaintReportType,
 } from '../../types'
 
 const { Text, Paragraph } = Typography
+
+// 兼容旧持久化数据：过滤已废弃的章节类型（V1.4 移除 hot_topics/risk_warning/media_focus 等）
+const KNOWN_KINDS = new Set(Object.keys(ComplaintReportChapterKindLabels))
 
 export default function ComplaintReportTemplateConfig() {
   const navigate = useNavigate()
   const { message, modal } = App.useApp()
   const { complaintReportTemplates, currentUser, updateComplaintReportTemplate, restoreDefaultTemplates } = useStore()
 
-  // 非系统管理员不可访问
+  const [draft, setDraft] = useState<ComplaintReportChapter[]>([])
+
+  const template = complaintReportTemplates[0]
+  const templateChapters = (template?.chapters || []).filter((c) => KNOWN_KINDS.has(c.kind))
+  // 模板缺失或为空时兜底默认章节（旧持久化数据兼容）
+  const effectiveChapters = templateChapters.length > 0 ? templateChapters : DEFAULT_REPORT_CHAPTERS
+  const templateId = template?.templateId || 'TPL-GENERAL-001'
+
+  useEffect(() => {
+    setDraft(JSON.parse(JSON.stringify(effectiveChapters)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complaintReportTemplates])
+
+  // 非系统管理员不可访问（钩子之后早退，保证 Hook 调用顺序稳定）
   if (currentUser.role !== 'admin') {
     return (
       <PageContainer>
         <Result
           status="403"
           title="无权限"
-          subTitle="报表模板配置仅系统管理员可访问"
+          subTitle="报表章节配置仅系统管理员可访问"
           extra={<Button type="primary" onClick={() => navigate('/complaints/reports')}>返回报表中心</Button>}
         />
       </PageContainer>
     )
   }
 
-  const [activeType, setActiveType] = useState<ComplaintReportType>('low_season_month')
-  const [draft, setDraft] = useState<ComplaintReportChapter[]>([])
-
-  const activeTemplate = complaintReportTemplates.find((t) => t.reportType === activeType)!
-
-  // 切换模板时加载章节副本到 draft
-  useEffect(() => {
-    setDraft(JSON.parse(JSON.stringify(activeTemplate.chapters)))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeType, activeTemplate.chapters])
-
   // 检测是否有未保存改动
-  const dirty = JSON.stringify(draft) !== JSON.stringify(activeTemplate.chapters)
+  const dirty = JSON.stringify(draft) !== JSON.stringify(effectiveChapters)
 
   const move = (index: number, dir: -1 | 1) => {
     const target = index + dir
@@ -91,38 +92,21 @@ export default function ComplaintReportTemplateConfig() {
       message.warning('至少需要保留一个启用的章节')
       return
     }
-    updateComplaintReportTemplate(activeTemplate.templateId, { chapters: draft })
-    message.success('模板已保存')
+    updateComplaintReportTemplate(templateId, { chapters: draft })
+    message.success('章节配置已保存')
   }
 
-  const handleRestoreOne = () => {
+  const handleRestore = () => {
     modal.confirm({
-      title: '还原该模板默认章节',
-      content: '将该模板章节恢复为系统默认结构，已编辑内容将丢失。',
-      okText: '确认还原',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: () => {
-        setDraft(JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS[activeType])))
-        updateComplaintReportTemplate(activeTemplate.templateId, {
-          chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS[activeType])),
-        })
-        message.success('已还原默认章节')
-      },
-    })
-  }
-
-  const handleRestoreAll = () => {
-    modal.confirm({
-      title: '还原全部模板默认',
-      content: '将三类周期报表模板全部恢复为系统默认结构，所有已编辑内容将丢失。',
+      title: '还原默认章节',
+      content: '将报表章节恢复为系统默认结构，已编辑内容将丢失。',
       okText: '确认还原',
       okType: 'danger',
       cancelText: '取消',
       onOk: () => {
         restoreDefaultTemplates()
-        setDraft(JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS[activeType])))
-        message.success('全部模板已还原默认')
+        setDraft(JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)))
+        message.success('已还原默认章节')
       },
     })
   }
@@ -172,66 +156,53 @@ export default function ComplaintReportTemplateConfig() {
     },
   ]
 
-  const tabItems = complaintReportTemplates.map((t: ComplaintReportTemplate) => ({
-    key: t.reportType,
-    label: `${t.templateName}（${t.chapters.length} 章）`,
-    children: (
-      <Card
-        title={
-          <Space>
-            <Text strong>{t.templateName}</Text>
-            <Tag>{ComplaintReportTypeLabels[t.reportType]}</Tag>
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button icon={<UndoOutlined />} onClick={handleRestoreOne}>还原该模板默认</Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>保存</Button>
-          </Space>
-        }
-      >
-        {dirty && activeTemplate.templateId === t.templateId && (
-          <Alert
-            type="warning"
-            showIcon
-            message="当前模板有未保存改动，请保存或还原默认"
-            style={{ marginBottom: 16 }}
-          />
-        )}
-        <Table
-          rowKey={(_, i) => String(i)}
-          columns={columns}
-          dataSource={draft}
-          pagination={false}
-          size="small"
-        />
-        <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 12 }}>
-          说明：调整章节顺序与启用状态后点击「保存」，新生成的报表将按此模板渲染。已生成的历史报表不受影响（其章节快照已冻结）。
-        </Paragraph>
-      </Card>
-    ),
-  }))
-
   return (
     <>
       <PageHeader
-        title="报表模板配置"
+        title="报表章节配置"
         breadcrumb={[
           { title: '首页', path: '/' },
           { title: '投诉台账', path: '/complaints' },
           { title: '数据报表', path: '/complaints/reports' },
-          { title: '模板配置' },
+          { title: '章节配置' },
         ]}
         extra={
-          <Button icon={<UndoOutlined />} onClick={handleRestoreAll}>还原全部默认</Button>
+          <Button icon={<UndoOutlined />} onClick={handleRestore}>还原默认章节</Button>
         }
       />
       <PageContainer>
-        <Tabs
-          items={tabItems}
-          activeKey={activeType}
-          onChange={(k) => setActiveType(k as ComplaintReportType)}
-        />
+        <Card
+          title={
+            <Space>
+              <Text strong>通用报表模板</Text>
+              <Tag>{draft.length} 章</Tag>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>保存</Button>
+            </Space>
+          }
+        >
+          {dirty && (
+            <Alert
+              type="warning"
+              showIcon
+              message="当前配置有未保存改动，请保存或还原默认"
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          <Table
+            rowKey={(_, i) => String(i)}
+            columns={columns}
+            dataSource={draft}
+            pagination={false}
+            size="small"
+          />
+          <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 12 }}>
+            说明：V1.4 起报表不再区分淡季月报/旺季周报/重要时段日报，所有报表统一使用本章节结构。调整章节顺序与启用状态后点击「保存」，新生成的报表将按此配置渲染。已生成的历史报表不受影响（其章节快照已冻结）。
+          </Paragraph>
+        </Card>
       </PageContainer>
     </>
   )

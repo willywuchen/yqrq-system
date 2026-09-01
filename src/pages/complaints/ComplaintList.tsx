@@ -37,6 +37,7 @@ import {
   ComplaintMethodLabels,
   TourismCategoryLabels,
   ReplyStatusLabels,
+  FORM_REPLY_STATUS_KEYS,
   GUIZHOU_CITIES,
   GUIZHOU_DISTRICTS,
   GUIZHOU_REGION_OPTIONS,
@@ -63,7 +64,8 @@ const IMPORT_HEADERS = [
   '投诉标题', '所属省份', '所属市州', '区/县', '投诉方式', '投诉类别', '投诉时间',
   '投诉人姓名', '投诉人性别', '投诉人电话', '投诉人邮箱', '投诉人地址', '合同日期',
   '被投诉人名称', '被投诉人电话', '被投诉人地址', '投诉内容', '投诉请求',
-  '投诉办理人员意见', '负责人审核意见', '回复状态', '回复时间', '回复内容', '备注', '办理状态',
+  '投诉办理人员意见', '负责人审核意见', '是否转办', '转办部门',
+  '回复状态', '回复时间', '回复内容', '备注', '办理状态',
 ] as const
 
 // 枚举字段：允许填中文标签或英文标识
@@ -76,13 +78,19 @@ const COMPLAINT_CATEGORY_MAP: Record<string, TourismCategory> = Object.fromEntri
 const COMPLAINT_STATUS_MAP: Record<string, ComplaintStatus> = Object.fromEntries(
   Object.entries(ComplaintStatusLabels).map(([k, v]) => [v, k as ComplaintStatus]),
 )
+// 回复状态：导入仅允许 未回复/已回复（已办结只保留展示历史数据）
 const REPLY_STATUS_MAP: Record<string, ReplyStatus> = Object.fromEntries(
-  Object.entries(ReplyStatusLabels).map(([k, v]) => [v, k as ReplyStatus]),
+  FORM_REPLY_STATUS_KEYS.map((k) => [ReplyStatusLabels[k], k]),
 )
 const GENDER_MAP: Record<string, 'male' | 'female' | 'unknown'> = {
   '男': 'male',
   '女': 'female',
   '未知': 'unknown',
+}
+// 是否转办
+const TRANSFER_MAP: Record<string, boolean> = {
+  '是': true,
+  '否': false,
 }
 
 // 枚举字段解析：兼容填中文标签或英文标识
@@ -290,6 +298,8 @@ export default function ComplaintList() {
       '要求退还购物相关费用并道歉',
       '已与投诉人沟通解释，正在协调旅行社处理。',
       '同意办理意见，请跟进回复。',
+      '否',
+      '',
       '已回复',
       '2026-08-22',
       '已协调旅行社退还相关费用，投诉人表示满意。',
@@ -320,7 +330,9 @@ export default function ComplaintList() {
       ['投诉请求', '否', '投诉人诉求'],
       ['投诉办理人员意见', '否', '投诉办理人员意见'],
       ['负责人审核意见', '否', '负责人审核意见'],
-      ['回复状态', '否', `可选值：${Object.values(ReplyStatusLabels).join('、')}，默认为"未回复"`],
+      ['是否转办', '否', '可选值：是、否，默认为"否"'],
+      ['转办部门', '否', '是否转办为"是"时必填，如：贵阳市文化和旅游局'],
+      ['回复状态', '否', `可选值：${FORM_REPLY_STATUS_KEYS.map((k) => ReplyStatusLabels[k]).join('、')}，默认为"未回复"`],
       ['回复时间', '否', '格式：2026-08-22'],
       ['回复内容', '否', '回复投诉人的内容'],
       ['备注', '否', '备注信息'],
@@ -427,10 +439,21 @@ export default function ComplaintList() {
 
           const rawReplyStatus = get('回复状态')
           const replyStatusVal = rawReplyStatus
-            ? resolveEnum(REPLY_STATUS_MAP, Object.keys(ReplyStatusLabels), rawReplyStatus)
+            ? resolveEnum(REPLY_STATUS_MAP, FORM_REPLY_STATUS_KEYS, rawReplyStatus)
             : undefined
           if (rawReplyStatus && !replyStatusVal) {
-            problems.push(`回复状态须为：${Object.values(ReplyStatusLabels).join('、')}`)
+            problems.push(`回复状态须为：${FORM_REPLY_STATUS_KEYS.map((k) => ReplyStatusLabels[k]).join('、')}`)
+          }
+
+          // 是否转办：空值默认"否"；转办时转办部门必填，不转办时忽略该列
+          const rawTransfer = get('是否转办')
+          const transferVal = rawTransfer ? TRANSFER_MAP[rawTransfer] : false
+          if (rawTransfer && transferVal === undefined) {
+            problems.push('是否转办须为：是、否')
+          }
+          const transferDepartment = get('转办部门')
+          if (transferVal && !transferDepartment) {
+            problems.push('是否转办为"是"时，转办部门不能为空')
           }
 
           if (problems.length) {
@@ -473,6 +496,8 @@ export default function ComplaintList() {
             handlerOpinion: get('投诉办理人员意见') || undefined,
             reviewerOpinion: get('负责人审核意见') || undefined,
             isTransferredToCase: false,
+            isTransferred: transferVal,
+            transferDepartment: transferVal ? transferDepartment : undefined,
             replyStatus: replyStatusVal || 'none',
             replyTime: replyDayjs?.isValid() ? replyDayjs.format('YYYY-MM-DD') : undefined,
             replyContent: get('回复内容') || undefined,

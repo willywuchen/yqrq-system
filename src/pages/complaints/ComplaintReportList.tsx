@@ -14,12 +14,9 @@ import {
   App,
   Typography,
   Popconfirm,
-  Drawer,
-  Timeline,
   Empty,
   Radio,
   Tooltip,
-  Input,
 } from 'antd'
 import {
   PlusOutlined,
@@ -27,8 +24,6 @@ import {
   DownloadOutlined,
   DeleteOutlined,
   SettingOutlined,
-  CalendarOutlined,
-  HistoryOutlined,
   FileExcelOutlined,
   FileWordOutlined,
   Html5Outlined,
@@ -37,24 +32,16 @@ import dayjs from 'dayjs'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
 import {
-  ComplaintReportTypeLabels,
-  ComplaintReportTypeColors,
   ComplaintReportScopeLabels,
-  ComplaintReportArchiveActionLabels,
-  ComplaintSeasonLabels,
-  ComplaintSeasonColors,
   DEFAULT_REPORT_CHAPTERS,
   GUIZHOU_CITIES,
   type ComplaintReport,
-  type ComplaintReportType,
   type ComplaintReportScope,
-  type ComplaintReportArchiveLog,
-  type ComplaintSeason,
 } from '../../types'
-import { genId, nowStr, buildComplaintReportSnapshot, buildReportSummary } from '../../utils'
+import { genId, nowStr, buildComplaintReportSnapshot, buildReportSummary, buildReportTitle } from '../../utils'
 import { buildComplaintReportHtml, exportComplaintDetailCsv as exportDetailCsv } from '../../utils/complaintReportHtml'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
 const { RangePicker } = DatePicker
 
@@ -64,28 +51,22 @@ export default function ComplaintReportList() {
   const {
     complaintReports,
     complaints,
+    complaintReportTemplates,
     currentUser,
     addComplaintReport,
     deleteComplaintReport,
     appendComplaintReportLog,
-    complaintReportArchiveLogs,
-    seasonCalendar,
-    updateSeasonCalendar,
-    restoreDefaultSeasonCalendar,
   } = useStore()
 
   const isAdmin = currentUser.role === 'admin'
   const [form] = Form.useForm()
   const [genOpen, setGenOpen] = useState(false)
   const [generating, setGenerating] = useState(false)
-  const [archiveReport, setArchiveReport] = useState<ComplaintReport | null>(null)
-  const [calendarOpen, setCalendarOpen] = useState(false)
-  const [filters, setFilters] = useState<{ type?: ComplaintReportType; scope?: ComplaintReportScope; range?: [dayjs.Dayjs, dayjs.Dayjs] }>({})
+  const [filters, setFilters] = useState<{ scope?: ComplaintReportScope; range?: [dayjs.Dayjs, dayjs.Dayjs] }>({})
 
   // 仅展示未删除报表，按生成时间倒序
   const visibleReports = complaintReports.filter((r) => !r.deleted)
   const filtered = visibleReports.filter((r) => {
-    if (filters.type && r.reportType !== filters.type) return false
     if (filters.scope && r.scopeLevel !== filters.scope) return false
     if (filters.range) {
       const t = dayjs(r.periodEnd)
@@ -100,14 +81,14 @@ export default function ComplaintReportList() {
   const handleGenerate = async () => {
     try {
       const values = await form.validateFields()
-      const templateId: string = values.templateId
-      const reportType: ComplaintReportType = values.reportType
       const scope: ComplaintReportScope = values.scope
       const scopeName = scope === 'province' ? '全省' : values.scopeName || '贵阳市'
       const start = values.range[0] instanceof dayjs.Dayjs ? values.range[0] : dayjs(values.range[0])
       const end = values.range[1] instanceof dayjs.Dayjs ? values.range[1] : dayjs(values.range[1])
+      const genDate = values.generateDate instanceof dayjs.Dayjs ? values.generateDate : dayjs(values.generateDate)
       const periodStart = start.format('YYYY-MM-DD')
       const periodEnd = end.format('YYYY-MM-DD')
+      const generatedAt = genDate.format('YYYY-MM-DD HH:mm:ss')
 
       // 权限校验（V1.1：县级不可越权）
       if (!allowedScopes.includes(scope)) {
@@ -120,21 +101,21 @@ export default function ComplaintReportList() {
       await new Promise((res) => setTimeout(res, 600))
 
       const snapshot = buildComplaintReportSnapshot(complaints, periodStart, periodEnd, scopeName)
-      const chapters = JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS[reportType]))
+      // 章节取通用模板配置（管理员可在"章节配置"中调整），兜底默认章节
+      const configured = complaintReportTemplates[0]?.chapters
+      const chapters = JSON.parse(JSON.stringify(configured && configured.length > 0 ? configured : DEFAULT_REPORT_CHAPTERS))
       const report: ComplaintReport = {
         id: genId('RPT'),
-        title: `${start.format('YYYY年M月D日')}~${end.format('YYYY年M月D日')} ${ComplaintReportTypeLabels[reportType]}（${scopeName}）`,
-        reportType,
+        title: buildReportTitle(periodStart, periodEnd, scopeName),
         periodStart,
         periodEnd,
         scopeLevel: scope,
         scopeName,
         generatedBy: currentUser.name,
-        generatedAt: nowStr(),
-        summary: buildReportSummary(snapshot, reportType, scopeName),
+        generatedAt,
+        summary: buildReportSummary(snapshot, scopeName),
         hasAiInsight: false,
         status: snapshot.total === 0 ? 'empty' : 'normal',
-        templateId,
         chapters,
         snapshot,
         trigger: 'manual',
@@ -261,10 +242,6 @@ export default function ComplaintReportList() {
     },
   })
 
-  const archiveLogs = archiveReport
-    ? complaintReportArchiveLogs.filter((l) => l.reportId === archiveReport.id).sort((a, b) => b.operatedAt.localeCompare(a.operatedAt))
-    : []
-
   const columns = [
     {
       title: '报表标题',
@@ -272,14 +249,8 @@ export default function ComplaintReportList() {
       key: 'title',
       render: (text: string, record: ComplaintReport) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-          {/* 第一行：报表类型 + 标题（超长省略，悬停查看全文） */}
+          {/* 第一行：报表标题（超长省略，悬停查看全文） */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <Tag
-              color={ComplaintReportTypeColors[record.reportType]}
-              style={{ marginRight: 0, flexShrink: 0 }}
-            >
-              {ComplaintReportTypeLabels[record.reportType]}
-            </Tag>
             <Text
               strong
               style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}
@@ -293,9 +264,6 @@ export default function ComplaintReportList() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
             {record.status === 'empty' && (
               <Tag color="default" style={{ marginRight: 0, flexShrink: 0 }}>空报表</Tag>
-            )}
-            {record.trigger === 'manual' && (
-              <Tag color="purple" style={{ marginRight: 0, flexShrink: 0 }}>手动</Tag>
             )}
             {record.hasAiInsight && (
               <Tag color="green" style={{ marginRight: 0, flexShrink: 0 }}>含风险研判</Tag>
@@ -348,7 +316,6 @@ export default function ComplaintReportList() {
           <Dropdown menu={exportMenu(record)} placement="bottomRight">
             <Button type="link" size="small" icon={<DownloadOutlined />}>导出</Button>
           </Dropdown>
-          <Button type="link" size="small" icon={<HistoryOutlined />} onClick={() => setArchiveReport(record)}>归档</Button>
           <Popconfirm
             title="确定删除该报表吗？"
             description="删除后 30 天内可恢复"
@@ -372,24 +339,15 @@ export default function ComplaintReportList() {
         extra={
           <Space>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenOpen(true)}>手动生成报表</Button>
-            <Tooltip title="系统管理员可配置报表模板章节">
-              <Button icon={<SettingOutlined />} disabled={!isAdmin} onClick={() => navigate('/complaints/reports/template-config')}>模板配置</Button>
+            <Tooltip title="系统管理员可配置报表章节">
+              <Button icon={<SettingOutlined />} disabled={!isAdmin} onClick={() => navigate('/complaints/reports/template-config')}>章节配置</Button>
             </Tooltip>
-            <Button icon={<CalendarOutlined />} onClick={() => setCalendarOpen(true)}>淡旺季日历</Button>
           </Space>
         }
       />
       <PageContainer>
         <Card style={{ marginBottom: 16 }}>
           <Space wrap>
-            <Select
-              placeholder="报表类型"
-              allowClear
-              style={{ width: 150 }}
-              value={filters.type}
-              onChange={(v) => setFilters({ ...filters, type: v })}
-              options={Object.entries(ComplaintReportTypeLabels).map(([k, v]) => ({ value: k as ComplaintReportType, label: v }))}
-            />
             <Select
               placeholder="数据层级"
               allowClear
@@ -439,27 +397,32 @@ export default function ComplaintReportList() {
         width={560}
         destroyOnClose
       >
-        <Form form={form} layout="vertical" initialValues={{ scope: 'province' }}>
-          <Form.Item label="报表类型（模板）" name="templateId" rules={[{ required: true, message: '请选择报表类型' }]}>
-            <Select
-              placeholder="选择报表类型"
-              onChange={(v) => {
-                // 同步 reportType
-                const reportType = v.startsWith('TPL-LSM') ? 'low_season_month' : v.startsWith('TPL-PW') ? 'peak_week' : 'important_day'
-                form.setFieldValue('reportType', reportType)
-              }}
-              options={[
-                { value: 'TPL-LSM-001', label: '淡季月报模板' },
-                { value: 'TPL-PW-001', label: '旺季周报模板' },
-                { value: 'TPL-ID-001', label: '重要时段日报模板（含紧急日报）' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="reportType" hidden>
-            <Input />
-          </Form.Item>
+        <Form form={form} layout="vertical" initialValues={{ scope: 'province', generateDate: dayjs() }}>
           <Form.Item label="统计时间范围" name="range" rules={[{ required: true, message: '请选择时间范围' }]}>
             <RangePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            label="报表生成日期"
+            name="generateDate"
+            rules={[
+              { required: true, message: '请选择报表生成日期' },
+              {
+                validator: (_, value) => {
+                  if (!value) return Promise.resolve()
+                  const range: [dayjs.Dayjs, dayjs.Dayjs] | undefined = form.getFieldValue('range')
+                  if (range?.[1] && value.isBefore(range[1].endOf('day'))) {
+                    return Promise.reject(new Error('生成日期不能早于统计周期结束日'))
+                  }
+                  if (value.isAfter(dayjs().endOf('day'))) {
+                    return Promise.reject(new Error('生成日期不能晚于今天'))
+                  }
+                  return Promise.resolve()
+                },
+              },
+            ]}
+            extra="报表落款与归档时间将使用该日期；可选历史日期补录"
+          >
+            <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="数据层级" name="scope" rules={[{ required: true }]}>
             <Radio.Group>
@@ -496,84 +459,6 @@ export default function ComplaintReportList() {
           </Form.Item>
         </Form>
       </Modal>
-
-      {/* 归档记录 Drawer */}
-      <Drawer
-        title={archiveReport ? `归档记录 · ${archiveReport.title}` : '归档记录'}
-        open={!!archiveReport}
-        onClose={() => setArchiveReport(null)}
-        width={480}
-      >
-        {archiveReport && (
-          <div>
-            <Paragraph type="secondary" style={{ fontSize: 12 }}>
-              报表编号：{archiveReport.id} ｜ 归档保留 3 年，3 年后转冷存储
-            </Paragraph>
-            {archiveLogs.length === 0 ? (
-              <Empty description="暂无操作记录" />
-            ) : (
-              <Timeline
-                items={archiveLogs.map((log: ComplaintReportArchiveLog) => ({
-                  color: log.action === 'delete' ? 'red' : log.action === 'export' ? 'blue' : 'green',
-                  children: (
-                    <div>
-                      <Space>
-                        <Tag color={log.action === 'delete' ? 'red' : log.action === 'export' ? 'blue' : 'green'}>
-                          {ComplaintReportArchiveActionLabels[log.action]}
-                        </Tag>
-                        <Text strong>{log.operator}</Text>
-                      </Space>
-                      <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
-                        {log.operatedAt} ｜ {ComplaintReportScopeLabels[log.operatorLevel]}
-                      </div>
-                      {log.detail && <div style={{ color: '#666', fontSize: 12, marginTop: 2 }}>{log.detail}</div>}
-                    </div>
-                  ),
-                }))}
-              />
-            )}
-          </div>
-        )}
-      </Drawer>
-
-      {/* 淡旺季日历 Drawer */}
-      <Drawer
-        title="淡旺季日历"
-        open={calendarOpen}
-        onClose={() => setCalendarOpen(false)}
-        width={520}
-        extra={isAdmin ? <Button size="small" onClick={() => { restoreDefaultSeasonCalendar(); message.success('已恢复默认淡旺季日历') }}>恢复默认</Button> : undefined}
-      >
-        <Paragraph type="secondary" style={{ fontSize: 12 }}>
-          淡季（月报）｜ 旺季（周报）｜ 重要时段（日报）。{isAdmin ? '点击月份切换类型。' : '仅查看，配置需系统管理员权限。'}
-        </Paragraph>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-          {seasonCalendar.map((item) => (
-            <div
-              key={item.month}
-              style={{
-                border: '1px solid #f0f0f0',
-                borderRadius: 6,
-                padding: 12,
-                textAlign: 'center',
-                cursor: isAdmin ? 'pointer' : 'default',
-                background:
-                  item.season === 'important' ? '#fff1f0' : item.season === 'peak' ? '#fff7e6' : '#f0f5ff',
-              }}
-              onClick={() => {
-                if (!isAdmin) return
-                const next: ComplaintSeason = item.season === 'low' ? 'peak' : item.season === 'peak' ? 'important' : 'low'
-                updateSeasonCalendar(item.month, next)
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{item.month}</div>
-              <Tag color={ComplaintSeasonColors[item.season]} style={{ marginTop: 4 }}>
-                {ComplaintSeasonLabels[item.season]}
-              </Tag>
-            </div>
-          ))}
-        </div>
-      </Drawer>
     </>
   )
 }

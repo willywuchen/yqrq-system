@@ -12,8 +12,6 @@ import {
 import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
 import {
-  ComplaintReportTypeLabels,
-  ComplaintReportTypeColors,
   ComplaintReportScopeLabels,
 } from '../../types'
 import { buildComplaintReportHtml, exportComplaintDetailCsv } from '../../utils/complaintReportHtml'
@@ -135,9 +133,6 @@ export default function ComplaintReportPreview() {
       <PageContainer>
         <div style={{ marginBottom: 12 }}>
           <Space size="middle">
-            <Tag color={ComplaintReportTypeColors[report.reportType]}>
-              {ComplaintReportTypeLabels[report.reportType]}
-            </Tag>
             <Text type="secondary">统计周期：{report.periodStart} 至 {report.periodEnd}</Text>
             <Text type="secondary">数据范围：{ComplaintReportScopeLabels[report.scopeLevel]} · {report.scopeName}</Text>
             <Text type="secondary">生成人：{report.generatedBy}</Text>

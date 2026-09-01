@@ -248,6 +248,54 @@ export function buildComplaintReportSnapshot(
         : '同一商家重复投诉，反映系统性问题',
     }))
 
+  // ⑤ 移送问题线索明细（转立案投诉，V1.4 参照线索移送统计分析口径）
+  // V1.6：补充区域（县级优先）、移送或涉及部门、线索主题三个维度，供"投诉转办情况"章交叉统计
+  const inferTransferDept = (c: Complaint): string => {
+    if (c.transferDepartment) return c.transferDepartment
+    const text = `${c.suspectedIssue || ''}${c.content || ''}`
+    if (/价格|明码标价|收费|消费|商品|购物/.test(text)) return '市场监管部门'
+    if (/交通|客运|包车|超载|运输/.test(text)) return '交通运输执法部门'
+    if (/公安|治安|驾驶|执照|牌照/.test(text)) return '公安机关'
+    if (/纪检|监察|失职|监管责任/.test(text)) return '纪检监察机关'
+    return '其他/未注明'
+  }
+  const inferTransferTheme = (c: Complaint): string => {
+    if (c.transferTheme) return c.transferTheme
+    const text = `${c.suspectedIssue || ''}${c.content || ''}`
+    if (/价格|明码标价|收费|消费|购物|商品/.test(text)) return '价格秩序及商品经营'
+    if (/交通|客运|包车|超载|运输/.test(text)) return '旅游交通客运'
+    if (/旅行社|网点|资质|经营范围/.test(text)) return '旅行社资质及经营规范'
+    if (/安全|飞行|驾驶|牌照|超载/.test(text)) return '安全管理及飞行资质'
+    if (/资金|项目/.test(text)) return '项目资金管理'
+    return '其他/未注明'
+  }
+  const transferredCases = filtered
+    .filter((c) => c.isTransferredToCase)
+    .map((c) => ({
+      id: c.id,
+      respondentName: c.respondent?.name || '未知',
+      complaintTime: c.complaintTime,
+      suspectedIssue: c.suspectedIssue || '涉嫌违法违规（未注明具体问题）',
+      statusLabel: ComplaintStatusLabels[c.status] || c.status,
+      region: c.district || c.city || '未知',
+      department: inferTransferDept(c),
+      theme: inferTransferTheme(c),
+    }))
+
+  // ⑥ 被投诉对象类别 × 高频问题关键词交叉统计（V1.4 问题性质分析章；V1.5 按类别分组渲染组内占比）
+  const catKwMap = new Map<string, { categoryLabel: string; keyword: string; count: number }>()
+  filtered.forEach((c) => {
+    const categoryLabel = TourismCategoryLabels[c.tourismCategory] || c.tourismCategory
+    const text = c.content || ''
+    COMPLAINT_KEYWORDS.forEach((kw) => {
+      if (!text.includes(kw)) return
+      const key = `${categoryLabel}|${kw}`
+      if (!catKwMap.has(key)) catKwMap.set(key, { categoryLabel, keyword: kw, count: 0 })
+      catKwMap.get(key)!.count++
+    })
+  })
+  const categoryKeywordStats = Array.from(catKwMap.values()).sort((a, b) => b.count - a.count)
+
   return {
     total,
     pending,
@@ -268,26 +316,46 @@ export function buildComplaintReportSnapshot(
     prevPeriodCount,
     momRate,
     riskGrading,
+    categoryKeywordStats,
+    transferredCases,
     typicalCases,
   }
 }
 
-// 根据报表类型与周期，生成摘要文案
-export function buildReportSummary(
-  snapshot: ComplaintReportSnapshot,
-  reportType: string,
-  scopeName: string,
-): string {
+// V1.4：按统计周期生成公文式报表标题
+// 整月 → "2026年8月贵州省旅游投诉受处工作情况"
+// 跨日 → "8月15日至8月21日贵阳市旅游投诉受处工作情况"
+// 单日 → "8月26日贵州省旅游投诉受处工作情况"
+export function buildReportTitle(periodStart: string, periodEnd: string, scopeName: string): string {
+  const start = dayjs(periodStart)
+  const end = dayjs(periodEnd)
+  const scopePrefix = scopeName === '全省' ? '贵州省' : scopeName
+  const isWholeMonth =
+    start.date() === 1 && end.date() === end.daysInMonth() && start.format('YYYY-MM') === end.format('YYYY-MM')
+  const sameDay = start.isSame(end, 'day')
+  let periodText: string
+  if (isWholeMonth) {
+    periodText = `${start.year()}年${start.month() + 1}月`
+  } else if (sameDay) {
+    periodText = `${start.month() + 1}月${start.date()}日`
+  } else if (start.year() === end.year()) {
+    periodText = `${start.month() + 1}月${start.date()}日至${end.month() + 1}月${end.date()}日`
+  } else {
+    periodText = `${start.year()}年${start.month() + 1}月${start.date()}日至${end.year()}年${end.month() + 1}月${end.date()}日`
+  }
+  return `${periodText}${scopePrefix}旅游投诉受处工作情况`
+}
+
+// 生成报表摘要文案（列表页第二行展示）
+export function buildReportSummary(snapshot: ComplaintReportSnapshot, scopeName: string): string {
   if (snapshot.total === 0) {
     return `${scopeName}本期无投诉数据`
   }
-  // V1.2：摘要弱化办结率，强化重复投诉商家与高发类别
   const top = snapshot.categoryStats[0]?.label || '-'
   const repeatCount = snapshot.respondentClusters.length
-  const periodLabel = reportType === 'low_season_month' ? '本月' : reportType === 'peak_week' ? '本周' : '当日'
   if (repeatCount > 0) {
     const topMerchant = snapshot.respondentClusters[0]
-    return `${periodLabel}${scopeName}投诉${snapshot.total}件，高发类别：${top}；重复投诉商家${repeatCount}家（重点：${topMerchant.name} ${topMerchant.count}次）`
+    return `本期${scopeName}投诉${snapshot.total}件，高发类别：${top}；重复投诉商家${repeatCount}家（重点：${topMerchant.name} ${topMerchant.count}次）`
   }
-  return `${periodLabel}${scopeName}投诉${snapshot.total}件，高发类别：${top}`
+  return `本期${scopeName}投诉${snapshot.total}件，高发类别：${top}`
 }

@@ -9,6 +9,7 @@ import {
   Card,
   Space,
   Upload,
+  Switch,
   Tag,
   App,
   Row,
@@ -30,6 +31,7 @@ import {
   ComplaintStatusLabels,
   type ReplyStatus,
   ReplyStatusLabels,
+  FORM_REPLY_STATUS_KEYS,
   GUIZHOU_REGION_OPTIONS,
   type Attachment,
 } from '../../types'
@@ -52,6 +54,11 @@ export default function ComplaintForm({ mode }: Props) {
 
   const editingId = mode === 'edit' ? params.id : undefined
   const editingComplaint = editingId ? complaints.find((c) => c.id === editingId) : undefined
+  // 历史数据可能存在"已办结"等不在可录范围内的回复状态，下拉需并入当前值以显示中文标签
+  const watchReplyStatus = Form.useWatch('replyStatus', form) as ReplyStatus | undefined
+  const replyStatusOptions = Array.from(
+    new Set<ReplyStatus>([...FORM_REPLY_STATUS_KEYS, ...(watchReplyStatus ? [watchReplyStatus] : [])]),
+  )
 
   useEffect(() => {
     if (editingComplaint) {
@@ -81,6 +88,8 @@ export default function ComplaintForm({ mode }: Props) {
         requests: editingComplaint.requests,
         handlerOpinion: editingComplaint.handlerOpinion,
         reviewerOpinion: editingComplaint.reviewerOpinion,
+        isTransferred: editingComplaint.isTransferred || false,
+        transferDepartment: editingComplaint.transferDepartment,
         replyStatus: editingComplaint.replyStatus,
         replyTime: editingComplaint.replyTime ? dayjs(editingComplaint.replyTime) : undefined,
         replyContent: editingComplaint.replyContent,
@@ -92,6 +101,7 @@ export default function ComplaintForm({ mode }: Props) {
         region: ['贵州省'],
         status: 'pending',
         replyStatus: 'none',
+        isTransferred: false,
       })
     }
   }, [editingComplaint, form])
@@ -151,6 +161,8 @@ export default function ComplaintForm({ mode }: Props) {
           // 表单已不再维护"是否转案件"，保留原记录值避免编辑时丢失历史数据
           isTransferredToCase: editingComplaint?.isTransferredToCase || false,
           suspectedIssue: editingComplaint?.suspectedIssue,
+          isTransferred: !!values.isTransferred,
+          transferDepartment: values.isTransferred ? values.transferDepartment : undefined,
           replyStatus: values.replyStatus as ReplyStatus,
           replyTime: values.replyTime ? values.replyTime.format('YYYY-MM-DD') : undefined,
           replyContent: values.replyContent,
@@ -387,6 +399,28 @@ export default function ComplaintForm({ mode }: Props) {
 
           {/* Section 5 - 办理与审核 */}
           <Card title="办理与审核" style={{ marginBottom: 16 }}>
+            <Row gutter={24}>
+              <Col span={12}>
+                <Form.Item name="isTransferred" label="是否转办" valuePropName="checked">
+                  <Switch checkedChildren="是" unCheckedChildren="否" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item noStyle shouldUpdate={(prev, cur) => prev.isTransferred !== cur.isTransferred}>
+                  {({ getFieldValue }) =>
+                    getFieldValue('isTransferred') ? (
+                      <Form.Item
+                        name="transferDepartment"
+                        label="转办部门"
+                        rules={[{ required: true, message: '请输入转办部门' }]}
+                      >
+                        <Input placeholder="请输入转办部门" maxLength={100} />
+                      </Form.Item>
+                    ) : null
+                  }
+                </Form.Item>
+              </Col>
+            </Row>
             <Form.Item name="handlerOpinion" label="投诉办理人员意见">
               <TextArea rows={3} placeholder="请输入投诉办理人员意见" />
             </Form.Item>
@@ -395,15 +429,15 @@ export default function ComplaintForm({ mode }: Props) {
             </Form.Item>
           </Card>
 
-          {/* Section 6 - 回复情况 */}
-          <Card title="回复情况" style={{ marginBottom: 16 }}>
+          {/* Section 6 - 办理回复 */}
+          <Card title="办理回复" style={{ marginBottom: 16 }}>
             <Row gutter={24}>
               <Col span={12}>
                 <Form.Item name="replyStatus" label="回复状态">
                   <Select>
-                    {Object.entries(ReplyStatusLabels).map(([value, label]) => (
+                    {replyStatusOptions.map((value) => (
                       <Select.Option key={value} value={value}>
-                        {label}
+                        {ReplyStatusLabels[value]}
                       </Select.Option>
                     ))}
                   </Select>

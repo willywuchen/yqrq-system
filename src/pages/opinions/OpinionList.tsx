@@ -37,8 +37,6 @@ import { OPINION_WARNING_REPORT_ENABLED } from '../../config/featureFlags'
 import {
   OpinionDataSourceLabels,
   OpinionDataSourceColors,
-  OpinionSentimentLabels,
-  OpinionSentimentColors,
   OpinionRiskLevelLabels,
   OpinionRiskLevelColors,
   OpinionHandleStatusLabels,
@@ -47,7 +45,6 @@ import {
   GUIZHOU_CITIES,
   type PublicOpinion,
   type OpinionDataSource,
-  type OpinionSentiment,
   type OpinionRiskLevel,
   type OpinionHandleStatus,
   type TourismCategory,
@@ -107,7 +104,6 @@ export default function OpinionList() {
   const [authorLocation, setAuthorLocation] = useState<string | undefined>()
   const [dataSource, setDataSource] = useState<OpinionDataSource | undefined>()
   const [tourismCategory, setTourismCategory] = useState<TourismCategory | undefined>()
-  const [sentiment, setSentiment] = useState<OpinionSentiment | undefined>()
   const [riskLevel, setRiskLevel] = useState<OpinionRiskLevel | undefined>()
   const [handleStatus, setHandleStatus] = useState<OpinionHandleStatus | undefined>()
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null)
@@ -132,7 +128,6 @@ export default function OpinionList() {
       if (authorLocation && o.authorLocation !== authorLocation) return false
       if (dataSource && o.dataSource !== dataSource) return false
       if (tourismCategory && o.tourismCategory !== tourismCategory) return false
-      if (sentiment && o.sentiment !== sentiment) return false
       if (riskLevel && o.riskLevel !== riskLevel) return false
       if (handleStatus && o.handleStatus !== handleStatus) return false
       if (dateRange && dateRange[0] && dateRange[1]) {
@@ -147,7 +142,6 @@ export default function OpinionList() {
     authorLocation,
     dataSource,
     tourismCategory,
-    sentiment,
     riskLevel,
     handleStatus,
     dateRange,
@@ -158,7 +152,6 @@ export default function OpinionList() {
     setAuthorLocation(undefined)
     setDataSource(undefined)
     setTourismCategory(undefined)
-    setSentiment(undefined)
     setRiskLevel(undefined)
     setHandleStatus(undefined)
     setDateRange(null)
@@ -194,9 +187,7 @@ export default function OpinionList() {
       '原地址',
       '数据来源',
       '旅游类别',
-      '情感倾向',
       '风险等级',
-      '风险指数',
       '处置状态',
       '发布时间',
       '创建人',
@@ -212,9 +203,7 @@ export default function OpinionList() {
       o.sourceUrl,
       OpinionDataSourceLabels[o.dataSource],
       TourismCategoryLabels[o.tourismCategory],
-      OpinionSentimentLabels[o.sentiment],
       OpinionRiskLevelLabels[o.riskLevel],
-      o.riskScore ?? '',
       OpinionHandleStatusLabels[o.handleStatus],
       o.publishTime,
       o.createdBy,
@@ -468,14 +457,6 @@ export default function OpinionList() {
       render: (c: TourismCategory) => TourismCategoryLabels[c] || '-',
     },
     {
-      title: '情感',
-      dataIndex: 'sentiment',
-      width: 80,
-      render: (s: OpinionSentiment) => (
-        <Tag color={OpinionSentimentColors[s]}>{OpinionSentimentLabels[s]}</Tag>
-      ),
-    },
-    {
       title: '风险',
       dataIndex: 'riskLevel',
       width: 90,
@@ -604,16 +585,6 @@ export default function OpinionList() {
                 options={Object.entries(TourismCategoryLabels).map(([k, v]) => ({ value: k, label: v }))}
               />
             </Form.Item>
-            <Form.Item name="sentiment">
-              <Select
-                placeholder="情感倾向"
-                value={sentiment}
-                onChange={setSentiment}
-                allowClear
-                style={{ width: 120 }}
-                options={Object.entries(OpinionSentimentLabels).map(([k, v]) => ({ value: k, label: v }))}
-              />
-            </Form.Item>
             <Form.Item name="riskLevel">
               <Select
                 placeholder="风险等级"
@@ -652,7 +623,7 @@ export default function OpinionList() {
           columns={columns}
           dataSource={filtered}
           rowKey="id"
-          scroll={{ x: 1700 }}
+          scroll={{ x: 1540 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

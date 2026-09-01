@@ -189,46 +189,75 @@ function DonutChart({ data }: { data: { label: string; count: number; color: str
   )
 }
 
-// 竖向柱状图组件
-function VerticalBarChart({ data }: { data: { label: string; count: number; color?: string }[] }) {
+// 竖向柱状图组件（高度自适应：绘图区按占比撑满，含基准线与虚线网格，底部标签与柱体对齐）
+function VerticalBarChart({ data, minHeight = 220 }: { data: { label: string; count: number; color?: string }[]; minHeight?: number }) {
   const max = Math.max(1, ...data.map((d) => d.count))
   if (data.length === 0 || data.every((d) => d.count === 0)) return <Text type="secondary">暂无数据</Text>
 
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: 180, padding: '0 8px', gap: 4 }}>
-      {data.map((d, i) => {
-        const h = (d.count / max) * 140
-        return (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{d.count}</Text>
+    <div style={{ flex: 1, minHeight, display: 'flex', flexDirection: 'column' }}>
+      {/* 绘图区：柱体高度按数值占比撑满可用高度 */}
+      <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 8, padding: '0 4px' }}>
+        {[0, 50, 100].map((p) => (
+          <div
+            key={p}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: `${p}%`, borderBottom: p === 0 ? '1px solid #e8e8e8' : '1px dashed #f0f0f0' }}
+          />
+        ))}
+        {data.map((d, i) => {
+          const pct = Math.max((d.count / max) * 100, 12)
+          return (
             <div
+              key={i}
+              title={`${d.label}：${d.count}件`}
               style={{
-                width: '60%',
-                maxWidth: 40,
-                height: Math.max(h, 2),
-                background: d.color || 'linear-gradient(180deg, #1677ff, #69b1ff)',
-                borderRadius: '4px 4px 0 0',
-                transition: 'height 0.3s',
-              }}
-            />
-            <div
-              title={d.label}
-              style={{
-                fontSize: 11,
-                color: '#666',
-                marginTop: 6,
-                textAlign: 'center',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                width: '100%',
+                flex: 1,
+                minWidth: 0,
+                height: `${pct}%`,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                position: 'relative',
+                zIndex: 1,
               }}
             >
-              {d.label}
+              <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{d.count}</Text>
+              <div
+                style={{
+                  width: '62%',
+                  maxWidth: 40,
+                  flex: 1,
+                  background: d.color || 'linear-gradient(180deg, #1677ff, #69b1ff)',
+                  borderRadius: '4px 4px 0 0',
+                  transition: 'height 0.3s',
+                }}
+              />
             </div>
+          )
+        })}
+      </div>
+      {/* 底部标签行：与柱体同分布对齐 */}
+      <div style={{ display: 'flex', gap: 8, padding: '6px 4px 0' }}>
+        {data.map((d, i) => (
+          <div
+            key={i}
+            title={d.label}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 11,
+              color: '#666',
+              textAlign: 'center',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {d.label}
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 }
@@ -560,13 +589,18 @@ export default function ComplaintDashboard() {
           </Col>
         </Row>
         <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={12}>
-            <Card title="区域分布" size="small">
+          <Col span={12} style={{ display: 'flex' }}>
+            <Card
+              title="区域分布"
+              size="small"
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
+              styles={{ body: { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } }}
+            >
               <VerticalBarChart data={cityStats.map((c) => ({ label: c.name.replace(/布依族苗族自治州|苗族侗族自治州|市/g, ''), count: c.count }))} />
             </Card>
           </Col>
-          <Col span={12}>
-            <Card title="投诉类别分布" size="small">
+          <Col span={12} style={{ display: 'flex' }}>
+            <Card title="投诉类别分布" size="small" style={{ width: '100%', height: '100%' }}>
               {categoryStats.length === 0 ? (
                 <Text type="secondary">暂无数据</Text>
               ) : (

@@ -30,8 +30,12 @@ import { useStore } from '../../store'
 import {
   SubsidyStatusColors,
   SubsidyStatusLabels,
+  SubsidyRewardMajorColors,
+  SubsidyRewardMajorLabels,
+  getDeclaredRewardMajors,
   type SubsidyApplication,
   type SubsidyStatus,
+  type RewardMajor,
 } from '../../types'
 import { formatMoney } from '../../utils'
 
@@ -69,6 +73,7 @@ export default function SubsidyList() {
   const { modal, message } = App.useApp()
 
   const [statusFilter, setStatusFilter] = useState<SubsidyStatus | ''>('')
+  const [rewardFilter, setRewardFilter] = useState<RewardMajor[]>([])
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null)
   const [keyword, setKeyword] = useState('')
   const [orgFilter, setOrgFilter] = useState('')
@@ -79,27 +84,32 @@ export default function SubsidyList() {
   }, [refreshSubsidyLockStatus])
 
   const isApplicant = currentUser.role === 'applicant'
-  const isFinalReviewer = currentUser.role === 'final_reviewer'
+  // 厅侧查看视角：终审员与第三方审核均可见全量已提交记录（草稿不可见）
+  const canViewAll = currentUser.role === 'final_reviewer' || currentUser.role === 'third_party_reviewer'
 
-  // 数据范围过滤：旅行社仅本单位；终审员全量已提交
+  // 数据范围过滤：旅行社仅本单位；厅侧查看角色全量已提交
   const visibleApps = useMemo(() => {
     let list = subsidyApplications
     if (isApplicant) {
       list = list.filter((a) => a.createdByOrg === currentUser.org)
-    } else if (isFinalReviewer) {
-      // 终审员仅可见已提交和已锁定的记录（草稿不可见）
+    } else if (canViewAll) {
+      // 终审员/第三方审核仅可见已提交和已锁定的记录（草稿不可见）
       list = list.filter((a) => a.status !== 'draft')
     } else {
       list = []
     }
     return list
-  }, [subsidyApplications, currentUser, isApplicant, isFinalReviewer])
+  }, [subsidyApplications, currentUser, isApplicant, canViewAll])
 
   // 二次筛选
   const filteredApps = useMemo(() => {
     let list = visibleApps
     if (statusFilter) list = list.filter((a) => a.status === statusFilter)
     if (orgFilter) list = list.filter((a) => a.createdByOrg.includes(orgFilter))
+    // 申报奖励项筛选（三大奖项互斥，可复选）
+    if (rewardFilter.length) {
+      list = list.filter((a) => getDeclaredRewardMajors(a).some((m) => rewardFilter.includes(m)))
+    }
     if (keyword) {
       const kw = keyword.toLowerCase()
       list = list.filter(
@@ -119,7 +129,7 @@ export default function SubsidyList() {
       })
     }
     return list
-  }, [visibleApps, statusFilter, orgFilter, keyword, dateRange])
+  }, [visibleApps, statusFilter, orgFilter, rewardFilter, keyword, dateRange])
 
   // 统计
   const stats = useMemo(() => {
@@ -206,6 +216,25 @@ export default function SubsidyList() {
       dataIndex: ['teamBaseInfo', 'sourcePlace'],
       width: 120,
       ellipsis: true,
+    },
+    {
+      title: '申报奖励项',
+      key: 'rewardMajor',
+      width: 180,
+      ellipsis: true,
+      render: (_: unknown, record: SubsidyApplication) => {
+        const majors = getDeclaredRewardMajors(record)
+        if (!majors.length) return <span style={{ color: '#999' }}>-</span>
+        return (
+          <Space size={4} wrap>
+            {majors.map((m) => (
+              <Tag key={m} color={SubsidyRewardMajorColors[m]} style={{ margin: 0 }}>
+                {SubsidyRewardMajorLabels[m]}
+              </Tag>
+            ))}
+          </Space>
+        )
+      },
     },
     {
       title: '申报人数',
@@ -348,7 +377,20 @@ export default function SubsidyList() {
                 label: SubsidyStatusLabels[s],
               }))}
             />
-            {isFinalReviewer && (
+            <Select
+              placeholder="申报奖励项"
+              allowClear
+              mode="multiple"
+              maxTagCount="responsive"
+              style={{ minWidth: 200 }}
+              value={rewardFilter}
+              onChange={(v) => setRewardFilter(v || [])}
+              options={(Object.keys(SubsidyRewardMajorLabels) as RewardMajor[]).map((m) => ({
+                value: m,
+                label: SubsidyRewardMajorLabels[m],
+              }))}
+            />
+            {canViewAll && (
               <Input
                 placeholder="旅行社名称"
                 allowClear
@@ -371,7 +413,7 @@ export default function SubsidyList() {
             rowKey="id"
             dataSource={filteredApps}
             columns={columns}
-            scroll={{ x: 1900 }}
+            scroll={{ x: 2080 }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,

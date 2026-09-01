@@ -9,6 +9,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Radio,
   Row,
   Select,
   Space,
@@ -41,7 +42,6 @@ import {
   SubsidyStatusColors,
   SubsidyStatusLabels,
   type SubsidyApplication,
-  type SubsidyOperationLog,
   type TouristItem,
 } from '../../types'
 import { formatMoney, maskIdNumber, maskPhone, nowStr } from '../../utils'
@@ -91,6 +91,28 @@ interface HotelRow {
   hotelStar: string
 }
 
+// 三大奖项类别（互斥）：B 入境旅游团队接待奖励 / C 专项旅游奖励 / E 文旅宣传奖励
+type RewardMajorKey = 'B' | 'C' | 'E'
+type RewardSection = 'teamReceptionRows' | 'specialTourismRows' | 'culturePromotionRows'
+const MajorSectionMap: Record<RewardMajorKey, RewardSection> = {
+  B: 'teamReceptionRows',
+  C: 'specialTourismRows',
+  E: 'culturePromotionRows',
+}
+const MajorLabels: Record<RewardMajorKey, string> = {
+  B: '入境旅游团队接待奖励',
+  C: '专项旅游奖励',
+  E: '旅游宣传奖励',
+}
+// 依据已填金额判定申报类别（某类任一行金额>0 即视为申报该类）
+function detectDeclaredMajor(app: SubsidyApplication | null): RewardMajorKey | null {
+  if (!app) return null
+  if (app.teamReceptionRows.some((r) => Number(r.amount) > 0)) return 'B'
+  if (app.specialTourismRows.some((r) => Number(r.amount) > 0)) return 'C'
+  if (app.culturePromotionRows.some((r) => Number(r.amount) > 0)) return 'E'
+  return null
+}
+
 export default function SubsidyForm() {
   const navigate = useNavigate()
   const params = useParams()
@@ -101,7 +123,6 @@ export default function SubsidyForm() {
     appendSubsidyLog,
     currentUser,
     refreshSubsidyLockStatus,
-    subsidyOperationLogs,
   } = useStore()
   const { modal, message } = App.useApp()
 
@@ -122,6 +143,11 @@ export default function SubsidyForm() {
       hotelStar: editingApp.teamBaseInfo.hotelStar || '',
     }))
   })
+
+  // 申报奖励类别（政策第八条：三大奖项互斥，只能选择一项申报），初始值依据已填金额判定
+  const [selectedMajor, setSelectedMajor] = useState<RewardMajorKey | null>(() =>
+    detectDeclaredMajor(editingApp),
+  )
 
   // 进入页面时刷新锁定状态
   useEffect(() => {
@@ -174,7 +200,7 @@ export default function SubsidyForm() {
 
   // 更新区块B/C/E行项
   const updateRow = (
-    section: 'teamReceptionRows' | 'specialTourismRows' | 'culturePromotionRows',
+    section: RewardSection,
     rowKey: string,
     field: string,
     value: any,
@@ -184,6 +210,28 @@ export default function SubsidyForm() {
       const rows = prev[section].map((r) => (r.key === rowKey ? { ...r, [field]: value } : r))
       return { ...prev, [section]: rows }
     })
+  }
+
+  // ===== 奖项互斥规则（政策第八、十、十一条）=====
+  // 三大奖项只能选择一项申报；申请团队接待奖励与专项旅游奖励互斥；
+  // 专项奖励内一次只能选择其中一项申报，改选时需先将已填项目金额清零
+  const majorLocked = (major: RewardMajorKey) => selectedMajor !== null && selectedMajor !== major
+  // 专项奖励中已申报（金额>0）的项目行，其余行不可再填
+  const declaredSpecialKey = formValues.specialTourismRows.find((r) => Number(r.amount) > 0)?.key
+  const rewardInputDisabled = (major: RewardMajorKey, rowKey?: string) =>
+    !canEdit ||
+    majorLocked(major) ||
+    (major === 'C' && declaredSpecialKey !== undefined && rowKey !== undefined && rowKey !== declaredSpecialKey)
+
+  // 首次填写任一奖项金额时自动选定申报类别，其余奖项随之锁定为不可填
+  const handleRewardAmountChange = (
+    section: RewardSection,
+    major: RewardMajorKey,
+    rowKey: string,
+    v: number | null,
+  ) => {
+    if (selectedMajor === null && (v || 0) > 0) setSelectedMajor(major)
+    updateRow(section, rowKey, 'amount', v || 0)
   }
 
   // 酒店行编辑
@@ -294,6 +342,51 @@ export default function SubsidyForm() {
   }, [])
 
 
+  // 切换申报奖励类别：其他奖项已有填报时，确认后清空再切换（政策第八条互斥）
+  const handleMajorSwitch = (major: RewardMajorKey) => {
+    if (!canEdit || major === selectedMajor) return
+    const others = (['B', 'C', 'E'] as RewardMajorKey[]).filter((m) => m !== major)
+    const filled = others.filter((m) => formValues[MajorSectionMap[m]].some((r) => Number(r.amount) > 0))
+    const doSwitch = () => {
+      setFormValues((prev) => {
+        if (!prev) return prev
+        const next = { ...prev }
+        others.forEach((m) => {
+          if (m === 'B') {
+            next.teamReceptionRows = next.teamReceptionRows.map((r) => ({ ...r, amount: 0, teamSize: 0 }))
+          } else if (m === 'C') {
+            next.specialTourismRows = next.specialTourismRows.map((r) => ({ ...r, amount: 0, teamSize: 0 }))
+          } else {
+            next.culturePromotionRows = next.culturePromotionRows.map((r) => ({
+              ...r,
+              amount: 0,
+              participants: 0,
+              activityName: '',
+              location: '',
+            }))
+          }
+        })
+        return next
+      })
+      setSelectedMajor(major)
+      message.success(`已切换申报类别为【${MajorLabels[major]}】`)
+    }
+    if (filled.length > 0) {
+      modal.confirm({
+        title: '切换申报奖励类别',
+        content: `政策规定三大奖项互斥，企业只能选择一项进行申报。切换为【${MajorLabels[major]}】将清空【${filled
+          .map((m) => MajorLabels[m])
+          .join('、')}】已填写的金额与人数，是否继续？`,
+        okText: '切换并清空',
+        okType: 'danger',
+        cancelText: '取消',
+        onOk: doSwitch,
+      })
+    } else {
+      doSwitch()
+    }
+  }
+
   // 保存
   const handleSave = () => {
     if (!canEdit) {
@@ -332,6 +425,19 @@ export default function SubsidyForm() {
       message.error('请填写联系电话')
       return
     }
+    // 互斥规则校验（政策第八条：三大奖项只能选一项；第十一条：专项奖励一次只能选一项）
+    const majorsWithAmount = (['B', 'C', 'E'] as RewardMajorKey[]).filter((m) =>
+      formValues[MajorSectionMap[m]].some((r) => Number(r.amount) > 0),
+    )
+    if (majorsWithAmount.length > 1) {
+      message.error('政策第八条：三大奖项互斥，只能选择一项申报，请仅保留一类奖励的金额')
+      return
+    }
+    const filledSpecial = formValues.specialTourismRows.filter((r) => Number(r.amount) > 0)
+    if (filledSpecial.length > 1) {
+      message.error('政策第十一条：专项旅游奖励一次只能选择其中一项奖项申报')
+      return
+    }
     if (totalAmount <= 0) {
       message.error('请至少填写一项奖励金额')
       return
@@ -341,6 +447,7 @@ export default function SubsidyForm() {
       icon: <SendOutlined />,
       content: (
         <div>
+          <p>申报奖励类别：<b>{selectedMajor ? MajorLabels[selectedMajor] : '-'}</b></p>
           <p>提交后省文旅厅将可查看本申报记录。</p>
           <p>行程结束日 24:00 前仍可修改（行程结束当日仍可修改，剩余：<b>{countdown.text}</b>）。</p>
           <p>申请奖励合计：<b style={{ color: '#cf1322' }}>{formatMoney(totalAmount)}</b></p>
@@ -455,13 +562,10 @@ export default function SubsidyForm() {
     })
   }
 
-  // 操作日志
-  const logs = subsidyOperationLogs
-    .filter((l) => l.applicationId === editingApp.id)
-    .sort((a, b) => b.time.localeCompare(a.time))
-
-  // 表格列
-  const receptionColumns = [
+  // 表格列：B/C 结构相同，按所属区块生成各自列。
+  // 修复：此前专项奖励直接复用接待奖励列，onChange 写死 teamReceptionRows，
+  // 专项奖励行键匹配不到导致输入不生效、随即被重置为 0
+  const buildRewardColumns = (section: 'teamReceptionRows' | 'specialTourismRows', major: RewardMajorKey) => [
     { title: '申请项目', dataIndex: 'project', width: 300 },
     {
       title: '申请奖励金额（元）',
@@ -472,9 +576,9 @@ export default function SubsidyForm() {
           value={r.amount}
           min={0}
           precision={2}
-          disabled={!canEdit}
+          disabled={rewardInputDisabled(major, r.key)}
           style={{ width: '100%' }}
-          onChange={(v) => updateRow('teamReceptionRows', r.key, 'amount', v || 0)}
+          onChange={(v) => handleRewardAmountChange(section, major, r.key, v)}
         />
       ),
     },
@@ -486,15 +590,16 @@ export default function SubsidyForm() {
         <InputNumber
           value={r.teamSize}
           min={0}
-          disabled={!canEdit}
+          disabled={rewardInputDisabled(major, r.key)}
           style={{ width: '100%' }}
-          onChange={(v) => updateRow('teamReceptionRows', r.key, 'teamSize', v || 0)}
+          onChange={(v) => updateRow(section, r.key, 'teamSize', v || 0)}
         />
       ),
     },
   ]
 
-  const specialColumns = receptionColumns
+  const receptionColumns = buildRewardColumns('teamReceptionRows', 'B')
+  const specialColumns = buildRewardColumns('specialTourismRows', 'C')
 
   const cultureColumns = [
     { title: '申请项目', dataIndex: 'project', width: 160 },
@@ -507,9 +612,9 @@ export default function SubsidyForm() {
           value={r.amount}
           min={0}
           precision={2}
-          disabled={!canEdit}
+          disabled={rewardInputDisabled('E')}
           style={{ width: '100%' }}
-          onChange={(v) => updateRow('culturePromotionRows', r.key, 'amount', v || 0)}
+          onChange={(v) => handleRewardAmountChange('culturePromotionRows', 'E', r.key, v)}
         />
       ),
     },
@@ -519,7 +624,7 @@ export default function SubsidyForm() {
       render: (_: unknown, r: any) => (
         <Input
           value={r.activityName}
-          disabled={!canEdit}
+          disabled={rewardInputDisabled('E')}
           placeholder="活动名称"
           onChange={(e) => updateRow('culturePromotionRows', r.key, 'activityName', e.target.value)}
         />
@@ -532,7 +637,7 @@ export default function SubsidyForm() {
       render: (_: unknown, r: any) => (
         <Input
           value={r.location}
-          disabled={!canEdit}
+          disabled={rewardInputDisabled('E')}
           placeholder="地点"
           onChange={(e) => updateRow('culturePromotionRows', r.key, 'location', e.target.value)}
         />
@@ -546,7 +651,7 @@ export default function SubsidyForm() {
         <InputNumber
           value={r.participants}
           min={0}
-          disabled={!canEdit}
+          disabled={rewardInputDisabled('E')}
           style={{ width: '100%' }}
           onChange={(v) => updateRow('culturePromotionRows', r.key, 'participants', v || 0)}
         />
@@ -865,13 +970,40 @@ export default function SubsidyForm() {
             </Col>
           </Row>
 
+          {/* 申报奖励类别（三大奖项互斥，只能选择一项申报） */}
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Space wrap>
+                <Text strong>申报奖励类别：</Text>
+                <Radio.Group
+                  value={selectedMajor ?? undefined}
+                  disabled={!canEdit}
+                  optionType="button"
+                  buttonStyle="solid"
+                  onChange={(e) => handleMajorSwitch(e.target.value as RewardMajorKey)}
+                  options={[
+                    { value: 'B', label: '入境旅游团队接待奖励' },
+                    { value: 'C', label: '专项旅游奖励' },
+                    { value: 'E', label: '旅游宣传奖励' },
+                  ]}
+                />
+                {selectedMajor && <Tag color="blue">其他奖项不可同时填报</Tag>}
+              </Space>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                政策第八条：入境旅游团队接待奖励、专项旅游奖励、文旅宣传交流奖励三大奖项互斥，企业只能选择一项进行申报；
+                专项旅游奖励一次只能选择其中一项奖项申报（第十一条）。请先选择申报奖励类别，下方将仅显示该类别对应的填写项；
+                如需改报其他奖项，请在此切换（会清空其他奖项已填内容）。
+              </Text>
+            </Space>
+          </Card>
+
           <Tabs
             defaultActiveKey="block-a"
             items={[
               // A. 申报单位基本信息
               {
                 key: 'block-a',
-                label: 'A. 申报单位基本信息',
+                label: '申报单位基本信息',
                 children: (
                   <Card bordered={false}>
                     <Form layout="vertical">
@@ -966,7 +1098,7 @@ export default function SubsidyForm() {
               // D. 团队基本信息（紧接A，便于用户从团信息核对方便）
               {
                 key: 'block-d',
-                label: 'D. 团队基本信息',
+                label: '团队基本信息',
                 children: (
                   <Card bordered={false}>
                     <Alert
@@ -1258,164 +1390,136 @@ export default function SubsidyForm() {
                   </Card>
                 ),
               },
-              // B. 入境旅游团队接待奖励
-              {
-                key: 'block-b',
-                label: 'B. 入境旅游团队接待奖励',
-                children: (
-                  <Card bordered={false}>
-                    <Alert
-                      type="info"
-                      showIcon
-                      message="申请团队人数已根据团信息游客客源地自动统计；如需调整可直接修改。"
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Table
-                      rowKey="key"
-                      dataSource={formValues.teamReceptionRows}
-                      columns={receptionColumns}
-                      pagination={false}
-                      size="small"
-                      summary={(data) => {
-                        const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
-                        const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
-                        return (
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0}>
-                              <Text strong>合计</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={1}>
-                              <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2}>
-                              <Text strong>{totalPpl}人</Text>
-                            </Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        )
-                      }}
-                    />
-                  </Card>
-                ),
-              },
-              // C. 专项旅游奖励
-              {
-                key: 'block-c',
-                label: 'C. 专项旅游奖励',
-                children: (
-                  <Card bordered={false}>
-                    <Alert
-                      type="info"
-                      showIcon
-                      message="根据团实际情况选择适用项填写；不适用的项目留空。"
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Table
-                      rowKey="key"
-                      dataSource={formValues.specialTourismRows}
-                      columns={specialColumns}
-                      pagination={false}
-                      size="small"
-                      summary={(data) => {
-                        const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
-                        const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
-                        return (
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0}>
-                              <Text strong>合计</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={1}>
-                              <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2}>
-                              <Text strong>{totalPpl}人</Text>
-                            </Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        )
-                      }}
-                    />
-                  </Card>
-                ),
-              },
-              // E. 旅游宣传奖励
-              {
-                key: 'block-e',
-                label: 'E. 旅游宣传奖励',
-                children: (
-                  <Card bordered={false}>
-                    <Alert
-                      type="info"
-                      showIcon
-                      message="根据团实际情况选择适用项填写；不适用的项目留空。"
-                      style={{ marginBottom: 16 }}
-                    />
-                    <Table
-                      rowKey="key"
-                      dataSource={formValues.culturePromotionRows}
-                      columns={cultureColumns}
-                      pagination={false}
-                      size="small"
-                      scroll={{ x: 900 }}
-                      summary={(data) => {
-                        const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
-                        const totalPpl = data.reduce((s, r: any) => s + (Number(r.participants) || 0), 0)
-                        return (
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0}>
-                              <Text strong>合计</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={1}>
-                              <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2}>-</Table.Summary.Cell>
-                            <Table.Summary.Cell index={3}>-</Table.Summary.Cell>
-                            <Table.Summary.Cell index={4}>
-                              <Text strong>{totalPpl}人</Text>
-                            </Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        )
-                      }}
-                    />
-                  </Card>
-                ),
-              },
-              // 操作记录
-              {
-                key: 'logs',
-                label: '操作记录',
-                children: (
-                  <Card bordered={false}>
-                    <Table
-                      rowKey="id"
-                      dataSource={logs}
-                      pagination={false}
-                      size="small"
-                      columns={[
-                        { title: '时间', dataIndex: 'time', width: 180 },
-                        { title: '操作人', dataIndex: 'operator', width: 120 },
-                        {
-                          title: '动作',
-                          dataIndex: 'action',
-                          width: 120,
-                          render: (v: SubsidyOperationLog['action']) => {
-                            const map: Record<string, string> = {
-                              create: '创建',
-                              edit: '编辑',
-                              submit: '提交',
-                              withdraw: '撤回',
-                              lock: '锁定',
-                              export_team: '导出团行程信息',
-                              export_form: '导出申报表',
-                              delete: '删除',
-                            }
-                            return <Tag>{map[v] || v}</Tag>
-                          },
-                        },
-                        { title: '说明', dataIndex: 'comment' },
-                      ]}
-                    />
-                  </Card>
-                ),
-              },
+              // 申报奖励填写区：三大奖项互斥（政策第八条），仅展示当前所选类别的填写项
+              ...(selectedMajor === 'B'
+                ? [
+                    {
+                      key: 'block-b',
+                      label: '入境旅游团队接待奖励',
+                      children: (
+                        <Card bordered={false}>
+                          <Alert
+                            type="info"
+                            showIcon
+                            message="申请团队人数已根据团信息游客客源地自动统计，如需调整可直接修改。政策第十条：申请本奖项将不能同时申报专项旅游奖励。"
+                            style={{ marginBottom: 16 }}
+                          />
+                          <Table
+                            rowKey="key"
+                            dataSource={formValues.teamReceptionRows}
+                            columns={receptionColumns}
+                            pagination={false}
+                            size="small"
+                            summary={(data) => {
+                              const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
+                              const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
+                              return (
+                                <Table.Summary.Row>
+                                  <Table.Summary.Cell index={0}>
+                                    <Text strong>合计</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={1}>
+                                    <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={2}>
+                                    <Text strong>{totalPpl}人</Text>
+                                  </Table.Summary.Cell>
+                                </Table.Summary.Row>
+                              )
+                            }}
+                          />
+                        </Card>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(selectedMajor === 'C'
+                ? [
+                    {
+                      key: 'block-c',
+                      label: '专项旅游奖励',
+                      children: (
+                        <Card bordered={false}>
+                          <Alert
+                            type="info"
+                            showIcon
+                            message="专项旅游奖励一次只能选择其中一项奖项申报（政策第十一条），改选其他项目时请先将已填项目的金额清零；申请本奖项将不能同时申报入境旅游团队接待奖励（政策第十条）。"
+                            style={{ marginBottom: 16 }}
+                          />
+                          <Table
+                            rowKey="key"
+                            dataSource={formValues.specialTourismRows}
+                            columns={specialColumns}
+                            pagination={false}
+                            size="small"
+                            summary={(data) => {
+                              const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
+                              const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
+                              return (
+                                <Table.Summary.Row>
+                                  <Table.Summary.Cell index={0}>
+                                    <Text strong>合计</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={1}>
+                                    <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={2}>
+                                    <Text strong>{totalPpl}人</Text>
+                                  </Table.Summary.Cell>
+                                </Table.Summary.Row>
+                              )
+                            }}
+                          />
+                        </Card>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(selectedMajor === 'E'
+                ? [
+                    {
+                      key: 'block-e',
+                      label: '旅游宣传奖励',
+                      children: (
+                        <Card bordered={false}>
+                          <Alert
+                            type="info"
+                            showIcon
+                            message="文旅宣传交流奖励所涉活动需提前报省文化和旅游厅审核批准后开展（政策第十二条）；根据活动实际情况选择适用项填写，不适用的项目留空。"
+                            style={{ marginBottom: 16 }}
+                          />
+                          <Table
+                            rowKey="key"
+                            dataSource={formValues.culturePromotionRows}
+                            columns={cultureColumns}
+                            pagination={false}
+                            size="small"
+                            scroll={{ x: 900 }}
+                            summary={(data) => {
+                              const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
+                              const totalPpl = data.reduce((s, r: any) => s + (Number(r.participants) || 0), 0)
+                              return (
+                                <Table.Summary.Row>
+                                  <Table.Summary.Cell index={0}>
+                                    <Text strong>合计</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={1}>
+                                    <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={2}>-</Table.Summary.Cell>
+                                  <Table.Summary.Cell index={3}>-</Table.Summary.Cell>
+                                  <Table.Summary.Cell index={4}>
+                                    <Text strong>{totalPpl}人</Text>
+                                  </Table.Summary.Cell>
+                                </Table.Summary.Row>
+                              )
+                            }}
+                          />
+                        </Card>
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
 

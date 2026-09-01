@@ -164,13 +164,14 @@ export const StatusColors: Record<ApplicationStatus, string> = {
 };
 
 // ========== 用户角色 ==========
-export type UserRole = 'applicant' | 'initial_reviewer' | 'review_reviewer' | 'final_reviewer' | 'admin';
+export type UserRole = 'applicant' | 'initial_reviewer' | 'review_reviewer' | 'final_reviewer' | 'third_party_reviewer' | 'admin';
 
 export const UserRoleLabels: Record<UserRole, string> = {
   applicant: '旅行社',
   initial_reviewer: '第三方初审员',
   review_reviewer: '市州复审员',
   final_reviewer: '省文旅厅',
+  third_party_reviewer: '第三方审核',
   admin: '系统管理员',
 };
 
@@ -453,6 +454,9 @@ export const ReplyStatusLabels: Record<ReplyStatus, string> = {
   closed: '已办结',
 };
 
+// 表单与导入模板可录的回复状态（已办结仅保留用于历史数据展示）
+export const FORM_REPLY_STATUS_KEYS: ReplyStatus[] = ['none', 'replied'];
+
 export interface ComplaintOperationLog {
   id: string;
   operator: string;
@@ -492,6 +496,11 @@ export interface Complaint {
   reviewerOpinion?: string;
   isTransferredToCase?: boolean;
   suspectedIssue?: string;
+  // 是否转办及转办部门（办理与审核环节）
+  isTransferred?: boolean;
+  transferDepartment?: string;
+  // 转办/移送线索主题（如：价格秩序及商品经营、旅游交通客运等，用于报表转办分析）
+  transferTheme?: string;
   replyStatus: ReplyStatus;
   replyTime?: string;
   replyContent?: string;
@@ -540,19 +549,7 @@ export const GUIZHOU_REGION_OPTIONS = [
 ]
 
 // ========== 投诉数据报表 ==========
-export type ComplaintReportType = 'low_season_month' | 'peak_week' | 'important_day'
-
-export const ComplaintReportTypeLabels: Record<ComplaintReportType, string> = {
-  low_season_month: '淡季月报',
-  peak_week: '旺季周报',
-  important_day: '重要时段日报',
-}
-
-export const ComplaintReportTypeColors: Record<ComplaintReportType, string> = {
-  low_season_month: 'blue',
-  peak_week: 'orange',
-  important_day: 'red',
-}
+// V1.4：取消"淡季月报/旺季周报/重要时段日报"三类报表类型，报表由手动选择的统计周期决定
 
 export type ComplaintReportScope = 'province' | 'city' | 'district'
 
@@ -574,28 +571,28 @@ export type ComplaintReportChapterKind =
   | 'trend_line'
   | 'top_respondents'
   | 'quality'
-  | 'hot_topics'
-  | 'risk_warning'
-  | 'media_focus'
+  | 'problem_analysis'
+  | 'transfer_analysis'
+  | 'transferred_cases'
   | 'ai_insight'
   | 'advice'
   | 'detail_attach'
 
 export const ComplaintReportChapterKindLabels: Record<ComplaintReportChapterKind, string> = {
-  overview: '本期综述',
+  overview: '总体情况',
   core_metrics: '核心指标',
-  method_pie: '投诉方式分布',
-  category_bar: '旅游类别分布',
-  region_bar: '区域分布',
+  method_pie: '投诉来源分布',
+  category_bar: '被投诉对象分布',
+  region_bar: '行政区域分布',
   status_donut: '处理状态分布',
   trend_line: '投诉数量趋势',
-  top_respondents: '高发被投诉人 Top10',
+  top_respondents: '高发被投诉对象 Top10',
   quality: '办理质量',
-  hot_topics: '热点追踪',
-  risk_warning: '敏感信息预警',
-  media_focus: '媒体关注焦点',
-  ai_insight: '风险研判段',
-  advice: '下期建议',
+  problem_analysis: '投诉问题性质分析',
+  transfer_analysis: '投诉转办情况',
+  transferred_cases: '移送问题线索情况',
+  ai_insight: '问题分析',
+  advice: '下步工作建议',
   detail_attach: '明细附件',
 }
 
@@ -605,31 +602,11 @@ export interface ComplaintReportChapter {
   enabled: boolean
 }
 
+// V1.4：三类模板合并为单一通用模板（章节可启停/排序/重命名）
 export interface ComplaintReportTemplate {
   templateId: string
   templateName: string
-  reportType: ComplaintReportType
   chapters: ComplaintReportChapter[]
-}
-
-// 淡旺季季节类型
-export type ComplaintSeason = 'low' | 'peak' | 'important'
-
-export const ComplaintSeasonLabels: Record<ComplaintSeason, string> = {
-  low: '淡季',
-  peak: '旺季',
-  important: '重要时段',
-}
-
-export const ComplaintSeasonColors: Record<ComplaintSeason, string> = {
-  low: 'blue',
-  peak: 'orange',
-  important: 'red',
-}
-
-export interface ComplaintSeasonCalendarItem {
-  month: string // YYYY-MM
-  season: ComplaintSeason
 }
 
 // 报表快照数据（生成时冻结的统计结果，便于回溯）
@@ -658,6 +635,22 @@ export interface ComplaintReportSnapshot {
   momRate: number
   // 商家风险等级评定（红/橙/黄）
   riskGrading: { name: string; level: 'red' | 'orange' | 'yellow'; count: number; reason: string }[]
+  // 被投诉对象类别 × 高频问题关键词交叉统计（V1.4 问题性质分析章）
+  categoryKeywordStats: { categoryLabel: string; keyword: string; count: number }[]
+  // 移送问题线索明细（转立案投诉，V1.4 参照线索移送统计分析口径；V1.6 增加区域/移送部门/线索主题维度）
+  transferredCases: {
+    id: string
+    respondentName: string
+    complaintTime: string
+    suspectedIssue: string
+    statusLabel: string
+    /** 所属区域（县级优先，无则取市州） */
+    region: string
+    /** 移送或涉及部门 */
+    department: string
+    /** 线索主题 */
+    theme: string
+  }[]
   // 典型案例（代表性投诉）
   typicalCases: { id: string; title: string; content: string; reason: string }[]
 }
@@ -665,7 +658,6 @@ export interface ComplaintReportSnapshot {
 export interface ComplaintReport {
   id: string
   title: string
-  reportType: ComplaintReportType
   periodStart: string
   periodEnd: string
   scopeLevel: ComplaintReportScope
@@ -676,7 +668,6 @@ export interface ComplaintReport {
   hasAiInsight: boolean
   aiInsight?: string
   status: ComplaintReportStatus
-  templateId: string
   chapters: ComplaintReportChapter[]
   snapshot: ComplaintReportSnapshot
   trigger: 'manual' | 'scheduled'
@@ -705,76 +696,28 @@ export interface ComplaintReportArchiveLog {
   detail?: string
 }
 
-// 淡旺季日历默认值（V1.1 确认）
-// 1-2月重要时段(春节)、3月淡季、4-9月旺季、10月重要时段(国庆)、11-12月淡季
-export function getDefaultSeasonCalendar(): ComplaintSeasonCalendarItem[] {
-  const now = new Date()
-  const year = now.getFullYear()
-  const items: ComplaintSeasonCalendarItem[] = []
-  for (let m = 1; m <= 12; m++) {
-    const monthStr = `${year}-${m.toString().padStart(2, '0')}`
-    let season: ComplaintSeason
-    if (m === 1 || m === 2) season = 'important'
-    else if (m === 3) season = 'low'
-    else if (m >= 4 && m <= 9) season = 'peak'
-    else if (m === 10) season = 'important'
-    else season = 'low'
-    items.push({ month: monthStr, season })
-  }
-  return items
-}
-
-// 三类周期默认模板章节
-// V1.3 调整：研判分析统一收敛到【风险研判段】（ai_insight），不再单独列聚类分析章
-// 弱化办理质量/办结率（quality 默认停用）
-export const DEFAULT_REPORT_CHAPTERS: Record<ComplaintReportType, ComplaintReportChapter[]> = {
-  low_season_month: [
-    { kind: 'overview', title: '一、本期综述', enabled: true },
-    { kind: 'core_metrics', title: '二、核心指标', enabled: true },
-    { kind: 'method_pie', title: '三、投诉方式分布', enabled: true },
-    { kind: 'category_bar', title: '四、旅游类别分布', enabled: true },
-    { kind: 'region_bar', title: '五、区域分布', enabled: true },
-    { kind: 'status_donut', title: '六、处理状态分布', enabled: true },
-    { kind: 'trend_line', title: '七、投诉数量趋势', enabled: true },
-    { kind: 'top_respondents', title: '八、高发被投诉人 Top10', enabled: true },
-    { kind: 'quality', title: '九、办理质量（选填）', enabled: false },
-    { kind: 'ai_insight', title: '十、风险研判段', enabled: true },
-    { kind: 'advice', title: '十一、下期工作建议', enabled: true },
-    { kind: 'detail_attach', title: '附件：投诉明细 Excel', enabled: true },
-  ],
-  peak_week: [
-    { kind: 'overview', title: '一、本周综述', enabled: true },
-    { kind: 'core_metrics', title: '二、核心指标', enabled: true },
-    { kind: 'method_pie', title: '三、投诉方式分布', enabled: true },
-    { kind: 'category_bar', title: '四、旅游类别分布', enabled: true },
-    { kind: 'region_bar', title: '五、区域分布', enabled: true },
-    { kind: 'status_donut', title: '六、处理状态分布', enabled: true },
-    { kind: 'top_respondents', title: '七、高发被投诉人 Top10', enabled: true },
-    { kind: 'hot_topics', title: '八、热点追踪', enabled: true },
-    { kind: 'risk_warning', title: '九、敏感信息预警', enabled: true },
-    { kind: 'media_focus', title: '十、媒体关注焦点', enabled: true },
-    { kind: 'ai_insight', title: '十一、风险研判段', enabled: true },
-    { kind: 'advice', title: '十二、下周工作建议', enabled: true },
-    { kind: 'detail_attach', title: '附件：投诉明细 Excel', enabled: true },
-  ],
-  important_day: [
-    { kind: 'overview', title: '一、当日综述', enabled: true },
-    { kind: 'core_metrics', title: '二、核心指标', enabled: true },
-    { kind: 'category_bar', title: '三、旅游类别分布', enabled: true },
-    { kind: 'region_bar', title: '四、区域分布', enabled: true },
-    { kind: 'status_donut', title: '五、处理状态分布', enabled: true },
-    { kind: 'risk_warning', title: '六、超期未办预警', enabled: true },
-    { kind: 'ai_insight', title: '七、风险研判段', enabled: true },
-    { kind: 'advice', title: '八、次日关注点', enabled: true },
-    { kind: 'detail_attach', title: '附件：投诉明细 Excel', enabled: true },
-  ],
-}
+// V1.4 统一报表默认章节（公文结构：参照《贵州省旅游投诉受处工作情况》+《发现问题及移送线索统计分析》）
+// 所有报表同一套结构，章节可由管理员在"报表章节配置"中启停/排序/重命名
+// V1.5：默认章节去掉"办理质量""移送问题线索情况"（章节类型保留，可在章节配置中手动启用）
+// V1.6：新增"投诉转办情况"章（参照附件报告"四、移送问题线索情况"，按移送部门/线索主题交叉统计）
+export const DEFAULT_REPORT_CHAPTERS: ComplaintReportChapter[] = [
+  { kind: 'overview', title: '一、总体情况', enabled: true },
+  { kind: 'core_metrics', title: '二、核心指标', enabled: true },
+  { kind: 'method_pie', title: '三、从投诉来源划分', enabled: true },
+  { kind: 'region_bar', title: '四、从行政区域划分', enabled: true },
+  { kind: 'category_bar', title: '五、从被投诉对象划分', enabled: true },
+  { kind: 'problem_analysis', title: '六、从投诉问题性质划分', enabled: true },
+  { kind: 'transfer_analysis', title: '七、投诉转办情况', enabled: true },
+  { kind: 'status_donut', title: '八、处理状态分布', enabled: true },
+  { kind: 'trend_line', title: '九、投诉数量趋势（近6个月）', enabled: true },
+  { kind: 'ai_insight', title: '十、问题分析', enabled: true },
+  { kind: 'advice', title: '十一、下步工作建议', enabled: true },
+  { kind: 'detail_attach', title: '附件：投诉明细', enabled: true },
+]
 
 export function getDefaultReportTemplates(): ComplaintReportTemplate[] {
   return [
-    { templateId: 'TPL-LSM-001', templateName: '淡季月报模板', reportType: 'low_season_month', chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.low_season_month)) },
-    { templateId: 'TPL-PW-001', templateName: '旺季周报模板', reportType: 'peak_week', chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.peak_week)) },
-    { templateId: 'TPL-ID-001', templateName: '重要时段日报模板', reportType: 'important_day', chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.important_day)) },
+    { templateId: 'TPL-GENERAL-001', templateName: '通用报表模板', chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)) },
   ]
 }
 
@@ -1129,3 +1072,29 @@ export const SubsidyActionLabels: Record<SubsidyOperationLog['action'], string> 
   export_form: '导出申报表',
   delete: '删除',
 };
+
+// ========== 补贴申报 - 申报奖励项识别 ==========
+// 政策第八条：入境旅游团队接待奖励 / 专项旅游奖励 / 旅游宣传奖励三大奖项互斥，
+// 旅行社提交申报时仅能申报其中一项，查看侧只展示有数据的奖励项。
+// 判定口径：某一大类下任一行「申请奖励金额」> 0 即视为申报该类
+// （与填报页 detectDeclaredMajor、数据统计页口径一致；接待奖励的团队人数会被自动拉取填充，不能作为判定依据）
+export const SubsidyRewardMajorLabels: Record<RewardMajor, string> = {
+  team_reception: '入境旅游团队接待奖励',
+  special_tourism: '专项旅游奖励',
+  culture_promotion: '旅游宣传奖励',
+};
+
+export const SubsidyRewardMajorColors: Record<RewardMajor, string> = {
+  team_reception: 'geekblue',
+  special_tourism: 'cyan',
+  culture_promotion: 'purple',
+};
+
+// 返回该申报记录已填报金额的奖励项；三类均未填写时返回空数组（如草稿未填报奖励金额）
+export function getDeclaredRewardMajors(app: SubsidyApplication): RewardMajor[] {
+  const majors: RewardMajor[] = [];
+  if (app.teamReceptionRows.some((r) => Number(r.amount) > 0)) majors.push('team_reception');
+  if (app.specialTourismRows.some((r) => Number(r.amount) > 0)) majors.push('special_tourism');
+  if (app.culturePromotionRows.some((r) => Number(r.amount) > 0)) majors.push('culture_promotion');
+  return majors;
+}

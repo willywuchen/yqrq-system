@@ -26,6 +26,7 @@ import {
   CalendarOutlined,
   EnvironmentOutlined,
   HomeOutlined,
+  GiftOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
@@ -34,9 +35,12 @@ import { useStore } from '../../store'
 import {
   SubsidyStatusColors,
   SubsidyStatusLabels,
+  SubsidyRewardMajorColors,
+  SubsidyRewardMajorLabels,
+  getDeclaredRewardMajors,
   type SubsidyApplication,
-  type SubsidyOperationLog,
   type SubsidyStatus,
+  type RewardMajor,
 } from '../../types'
 import { formatMoney, maskIdNumber, maskPhone } from '../../utils'
 
@@ -72,7 +76,7 @@ export default function SubsidyDetail() {
   const navigate = useNavigate()
   const params = useParams()
   const id = params.id
-  const { subsidyApplications, currentUser, refreshSubsidyLockStatus, subsidyOperationLogs } = useStore()
+  const { subsidyApplications, currentUser, refreshSubsidyLockStatus } = useStore()
   const [exportOpen, setExportOpen] = useState(false)
 
   useEffect(() => {
@@ -102,10 +106,10 @@ export default function SubsidyDetail() {
   const s = app.teamPresetSnapshot
   const bi = app.teamBaseInfo
 
-  // 操作日志
-  const logs = subsidyOperationLogs
-    .filter((l) => l.applicationId === app.id)
-    .sort((a, b) => b.time.localeCompare(a.time))
+  // 申报奖励项（三大奖项互斥）：只展示旅行社提交时有数据的奖励项；
+  // 三类均未填写金额时（草稿）回退为全部展示
+  const declaredMajors = getDeclaredRewardMajors(app)
+  const showMajor = (m: RewardMajor) => declaredMajors.length === 0 || declaredMajors.includes(m)
 
   // 表格列定义（只读）
   const receptionColumns = [
@@ -201,6 +205,19 @@ export default function SubsidyDetail() {
               <Divider type="vertical" />
               <span><TeamOutlined /> 团名称：{s.teamName}</span>
               <Divider type="vertical" />
+              <span>
+                <GiftOutlined /> 申报奖励项：
+                {declaredMajors.length ? (
+                  declaredMajors.map((m) => (
+                    <Tag key={m} color={SubsidyRewardMajorColors[m]} style={{ marginInlineEnd: 0 }}>
+                      {SubsidyRewardMajorLabels[m]}
+                    </Tag>
+                  ))
+                ) : (
+                  '未填写'
+                )}
+              </span>
+              <Divider type="vertical" />
               <span><CalendarOutlined /> 出团日期：{s.travelStart}</span>
               <Divider type="vertical" />
               <span>锁定时间：{app.lockDeadline}</span>
@@ -217,39 +234,45 @@ export default function SubsidyDetail() {
       </PageHeader>
       <PageContainer>
         <div style={{ padding: 16 }}>
-          {/* 金额汇总 */}
+          {/* 金额汇总（奖励项互斥，只展示有数据的奖励项；三类均未填写时全部展示） */}
           <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col span={6}>
-              <Card size="small">
-                <Statistic
-                  title="团队接待奖励"
-                  value={app.teamReceptionRows.reduce((s, r) => s + r.amount, 0)}
-                  precision={2}
-                  prefix="¥"
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card size="small">
-                <Statistic
-                  title="专项旅游奖励"
-                  value={app.specialTourismRows.reduce((s, r) => s + r.amount, 0)}
-                  precision={2}
-                  prefix="¥"
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card size="small">
-                <Statistic
-                  title="文旅宣传奖励"
-                  value={app.culturePromotionRows.reduce((s, r) => s + r.amount, 0)}
-                  precision={2}
-                  prefix="¥"
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
+            {showMajor('team_reception') && (
+              <Col span={declaredMajors.length ? 12 : 6}>
+                <Card size="small">
+                  <Statistic
+                    title={SubsidyRewardMajorLabels.team_reception}
+                    value={app.teamReceptionRows.reduce((s, r) => s + r.amount, 0)}
+                    precision={2}
+                    prefix="¥"
+                  />
+                </Card>
+              </Col>
+            )}
+            {showMajor('special_tourism') && (
+              <Col span={declaredMajors.length ? 12 : 6}>
+                <Card size="small">
+                  <Statistic
+                    title={SubsidyRewardMajorLabels.special_tourism}
+                    value={app.specialTourismRows.reduce((s, r) => s + r.amount, 0)}
+                    precision={2}
+                    prefix="¥"
+                  />
+                </Card>
+              </Col>
+            )}
+            {showMajor('culture_promotion') && (
+              <Col span={declaredMajors.length ? 12 : 6}>
+                <Card size="small">
+                  <Statistic
+                    title={SubsidyRewardMajorLabels.culture_promotion}
+                    value={app.culturePromotionRows.reduce((s, r) => s + r.amount, 0)}
+                    precision={2}
+                    prefix="¥"
+                  />
+                </Card>
+              </Col>
+            )}
+            <Col span={declaredMajors.length ? 12 : 6}>
               <Card size="small">
                 <Statistic
                   title="申请奖励合计"
@@ -267,7 +290,7 @@ export default function SubsidyDetail() {
             items={[
               {
                 key: 'block-a',
-                label: 'A. 申报单位基本信息',
+                label: '申报单位基本信息',
                 children: (
                   <Card bordered={false}>
                     <Descriptions bordered column={3} size="small">
@@ -289,7 +312,7 @@ export default function SubsidyDetail() {
               },
               {
                 key: 'block-d',
-                label: 'D. 团队基本信息',
+                label: '团队基本信息',
                 children: (
                   <Card bordered={false}>
                     <Descriptions bordered column={2} size="small">
@@ -362,93 +385,105 @@ export default function SubsidyDetail() {
                   </Card>
                 ),
               },
-              {
-                key: 'block-b',
-                label: 'B. 入境旅游团队接待奖励',
-                children: (
-                  <Card bordered={false}>
-                    <Table
-                      rowKey="key"
-                      dataSource={app.teamReceptionRows}
-                      columns={receptionColumns}
-                      pagination={false}
-                      size="small"
-                      summary={(data) => {
-                        const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
-                        const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
-                        return (
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0}><Text strong>合计</Text></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1}>
-                              <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2}><Text strong>{totalPpl}人</Text></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        )
-                      }}
-                    />
-                  </Card>
-                ),
-              },
-              {
-                key: 'block-c',
-                label: 'C. 专项旅游奖励',
-                children: (
-                  <Card bordered={false}>
-                    <Table
-                      rowKey="key"
-                      dataSource={app.specialTourismRows}
-                      columns={specialColumns}
-                      pagination={false}
-                      size="small"
-                      summary={(data) => {
-                        const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
-                        const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
-                        return (
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0}><Text strong>合计</Text></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1}>
-                              <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2}><Text strong>{totalPpl}人</Text></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        )
-                      }}
-                    />
-                  </Card>
-                ),
-              },
-              {
-                key: 'block-e',
-                label: 'E. 旅游宣传奖励',
-                children: (
-                  <Card bordered={false}>
-                    <Table
-                      rowKey="key"
-                      dataSource={app.culturePromotionRows}
-                      columns={cultureColumns}
-                      pagination={false}
-                      size="small"
-                      scroll={{ x: 900 }}
-                      summary={(data) => {
-                        const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
-                        const totalPpl = data.reduce((s, r: any) => s + (Number(r.participants) || 0), 0)
-                        return (
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0}><Text strong>合计</Text></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1}>
-                              <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2}>-</Table.Summary.Cell>
-                            <Table.Summary.Cell index={3}>-</Table.Summary.Cell>
-                            <Table.Summary.Cell index={4}><Text strong>{totalPpl}人</Text></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        )
-                      }}
-                    />
-                  </Card>
-                ),
-              },
+              ...(showMajor('team_reception')
+                ? [
+                    {
+                      key: 'block-b',
+                      label: SubsidyRewardMajorLabels.team_reception,
+                      children: (
+                        <Card bordered={false}>
+                          <Table
+                            rowKey="key"
+                            dataSource={app.teamReceptionRows}
+                            columns={receptionColumns}
+                            pagination={false}
+                            size="small"
+                            summary={(data) => {
+                              const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
+                              const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
+                              return (
+                                <Table.Summary.Row>
+                                  <Table.Summary.Cell index={0}><Text strong>合计</Text></Table.Summary.Cell>
+                                  <Table.Summary.Cell index={1}>
+                                    <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={2}><Text strong>{totalPpl}人</Text></Table.Summary.Cell>
+                                </Table.Summary.Row>
+                              )
+                            }}
+                          />
+                        </Card>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(showMajor('special_tourism')
+                ? [
+                    {
+                      key: 'block-c',
+                      label: SubsidyRewardMajorLabels.special_tourism,
+                      children: (
+                        <Card bordered={false}>
+                          <Table
+                            rowKey="key"
+                            dataSource={app.specialTourismRows}
+                            columns={specialColumns}
+                            pagination={false}
+                            size="small"
+                            summary={(data) => {
+                              const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
+                              const totalPpl = data.reduce((s, r: any) => s + (Number(r.teamSize) || 0), 0)
+                              return (
+                                <Table.Summary.Row>
+                                  <Table.Summary.Cell index={0}><Text strong>合计</Text></Table.Summary.Cell>
+                                  <Table.Summary.Cell index={1}>
+                                    <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={2}><Text strong>{totalPpl}人</Text></Table.Summary.Cell>
+                                </Table.Summary.Row>
+                              )
+                            }}
+                          />
+                        </Card>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(showMajor('culture_promotion')
+                ? [
+                    {
+                      key: 'block-e',
+                      label: SubsidyRewardMajorLabels.culture_promotion,
+                      children: (
+                        <Card bordered={false}>
+                          <Table
+                            rowKey="key"
+                            dataSource={app.culturePromotionRows}
+                            columns={cultureColumns}
+                            pagination={false}
+                            size="small"
+                            scroll={{ x: 900 }}
+                            summary={(data) => {
+                              const totalAmt = data.reduce((s, r: any) => s + (Number(r.amount) || 0), 0)
+                              const totalPpl = data.reduce((s, r: any) => s + (Number(r.participants) || 0), 0)
+                              return (
+                                <Table.Summary.Row>
+                                  <Table.Summary.Cell index={0}><Text strong>合计</Text></Table.Summary.Cell>
+                                  <Table.Summary.Cell index={1}>
+                                    <Text strong style={{ color: '#cf1322' }}>{formatMoney(totalAmt)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={2}>-</Table.Summary.Cell>
+                                  <Table.Summary.Cell index={3}>-</Table.Summary.Cell>
+                                  <Table.Summary.Cell index={4}><Text strong>{totalPpl}人</Text></Table.Summary.Cell>
+                                </Table.Summary.Row>
+                              )
+                            }}
+                          />
+                        </Card>
+                      ),
+                    },
+                  ]
+                : []),
               {
                 key: 'tourists',
                 label: '游客名单',
@@ -461,43 +496,6 @@ export default function SubsidyDetail() {
                       pagination={false}
                       size="small"
                       scroll={{ x: 900 }}
-                    />
-                  </Card>
-                ),
-              },
-              {
-                key: 'logs',
-                label: '操作记录',
-                children: (
-                  <Card bordered={false}>
-                    <Table
-                      rowKey="id"
-                      dataSource={logs}
-                      pagination={false}
-                      size="small"
-                      columns={[
-                        { title: '时间', dataIndex: 'time', width: 180 },
-                        { title: '操作人', dataIndex: 'operator', width: 120 },
-                        {
-                          title: '动作',
-                          dataIndex: 'action',
-                          width: 120,
-                          render: (v: SubsidyOperationLog['action']) => {
-                            const map: Record<string, string> = {
-                              create: '创建',
-                              edit: '编辑',
-                              submit: '提交',
-                              withdraw: '撤回',
-                              lock: '锁定',
-                              export_team: '导出团行程信息',
-                              export_form: '导出申报表',
-                              delete: '删除',
-                            }
-                            return <Tag>{map[v] || v}</Tag>
-                          },
-                        },
-                        { title: '说明', dataIndex: 'comment' },
-                      ]}
                     />
                   </Card>
                 ),

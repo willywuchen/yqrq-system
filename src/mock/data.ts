@@ -1,8 +1,8 @@
-import type { Application, Complaint, Message, RewardCategory, TouristItem, ScenicInfo, AccommodationInfo, GuideDriverInfo, Attachment, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleLog } from '../types';
+import type { Application, Complaint, Message, RewardCategory, TouristItem, ScenicInfo, AccommodationInfo, GuideDriverInfo, Attachment, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleLog, ComplaintMethod, TourismCategory, ComplaintStatus } from '../types';
 import { POLICY_CONSTANTS } from '../types';
-import type { ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog, ComplaintSeasonCalendarItem } from '../types';
-import { getDefaultReportTemplates, getDefaultSeasonCalendar, DEFAULT_REPORT_CHAPTERS } from '../types';
-import { buildComplaintReportSnapshot, buildReportSummary } from '../utils';
+import type { ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog } from '../types';
+import { getDefaultReportTemplates, DEFAULT_REPORT_CHAPTERS } from '../types';
+import { buildComplaintReportSnapshot, buildReportSummary, buildReportTitle } from '../utils';
 
 // 当前年度预算（万元）
 export const BUDGET_TOTAL = 5000;
@@ -670,6 +670,119 @@ export const MockMessages: Message[] = [
 ];
 
 // ========== Mock 投诉台账数据 ==========
+// V1.4：精简投诉工厂（扩充报表演示数据：全年分布、7-8月旺季集中、含移送线索与重复投诉商家）
+function mkComplaint(cfg: {
+  id: string;
+  title: string;
+  city: string;
+  district?: string;
+  method: ComplaintMethod;
+  category: TourismCategory;
+  time: string;
+  status: ComplaintStatus;
+  respondent: string;
+  content: string;
+  complainant: string;
+  transferred?: boolean;
+  suspectedIssue?: string;
+  // 转办/移送信息（V1.6 报表"投诉转办情况"章数据基础）
+  transferDept?: string;
+  transferTheme?: string;
+  replyTime?: string;
+}): Complaint {
+  return {
+    id: cfg.id,
+    title: cfg.title,
+    province: '贵州省',
+    city: cfg.city,
+    district: cfg.district,
+    complaintMethod: cfg.method,
+    tourismCategory: cfg.category,
+    complaintTime: cfg.time,
+    status: cfg.status,
+    complainant: { name: cfg.complainant },
+    respondent: { name: cfg.respondent },
+    content: cfg.content,
+    requests: '要求依法核实处理',
+    ...(cfg.transferred ? { isTransferredToCase: true } : {}),
+    ...(cfg.suspectedIssue ? { suspectedIssue: cfg.suspectedIssue } : {}),
+    ...(cfg.transferDept ? { isTransferred: true, transferDepartment: cfg.transferDept } : {}),
+    ...(cfg.transferTheme ? { transferTheme: cfg.transferTheme } : {}),
+    replyStatus: cfg.status === 'closed' ? 'closed' : cfg.status === 'replied' ? 'replied' : 'none',
+    ...(cfg.replyTime ? { replyTime: cfg.replyTime, replyContent: '已按相关法规处理完毕，投诉人对处理结果表示认可。' } : {}),
+    attachments: [],
+    remark: cfg.transferred ? '诉转案，线索已移送执法部门' : undefined,
+    createdBy: '管理员',
+    createTime: `${cfg.time} 10:00:00`,
+    updateTime: cfg.replyTime ? `${cfg.replyTime} 16:00:00` : `${cfg.time} 10:00:00`,
+    operationLogs: [{ id: `ol-${cfg.id}`, operator: '管理员', action: 'create' as const, summary: '录入投诉信息', time: `${cfg.time} 10:00:00` }],
+  };
+}
+
+// 扩充投诉（2026年1-8月，旺季7-8月集中；被投诉商家名称对齐省厅通报口径）
+const extraComplaints: Complaint[] = [
+  // 1月
+  mkComplaint({ id: 'TS-20260112-0101', title: '旅行社承诺退款未兑现', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'travel_agency', time: '2026-01-12', status: 'closed', respondent: '贵州悠悠印象旅行社', complainant: '刘一鸣', replyTime: '2026-01-20', content: '行程结束后贵州悠悠印象旅行社拒绝退还承诺的优惠差价，多次沟通被拒，要求退款。' }),
+  mkComplaint({ id: 'TS-20260125-0102', title: '景区节假日排队时间过长', city: '安顺市', district: '镇宁布依族苗族自治县', method: 'hotline_12345', category: 'scenic_area', time: '2026-01-25', status: 'closed', respondent: '黄果树瀑布景区', complainant: '陈静', replyTime: '2026-02-02', content: '节假日期间黄果树瀑布景区排队时间过长，摆渡车调度不及时，游客滞留超过2小时。' }),
+  mkComplaint({ id: 'TS-20260128-0103', title: '导游服务态度差', city: '黔东南苗族侗族自治州', district: '雷山县', method: 'phone', category: 'tour_guide', time: '2026-01-28', status: 'closed', respondent: '导游王某（D-5201-000201）', complainant: '杨帆', replyTime: '2026-02-05', content: '西江千户苗寨一日游导游全程服务态度差，言语生硬，行程讲解敷衍了事。' }),
+  // 2月（春节）
+  mkComplaint({ id: 'TS-20260215-0104', title: '春节期间导游强制自费项目', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'travel_agency', time: '2026-02-15', status: 'closed', respondent: '贵州悠悠印象旅行社', complainant: '周婷', replyTime: '2026-02-23', content: '春节期间参加黄果树二日游，贵州悠悠印象旅行社导游强制安排自费项目，不参加的游客被冷落。' }),
+  mkComplaint({ id: 'TS-20260216-0105', title: '景区停车场乱收费', city: '安顺市', district: '镇宁布依族苗族自治县', method: 'hotline_12345', category: 'scenic_area', time: '2026-02-16', status: 'processing', respondent: '黄果树瀑布景区', complainant: '吴刚', content: '黄果树瀑布景区停车场乱收费，未公示收费标准，收费人员无法出示收费依据。' }),
+  mkComplaint({ id: 'TS-20260217-0106', title: '景区限流未提前公告', city: '黔东南苗族侗族自治州', district: '雷山县', method: 'online_platform', category: 'scenic_area', time: '2026-02-17', status: 'closed', respondent: '西江千户苗寨景区', complainant: '郑洁', replyTime: '2026-02-24', content: '西江千户苗寨景区限流信息未提前公告，游客到达后无法入园，现场退票被拒。' }),
+  mkComplaint({ id: 'TS-20260219-0107', title: '酒店卫生条件差', city: '贵阳市', district: '云岩区', method: 'phone', category: 'accommodation', time: '2026-02-19', status: 'closed', respondent: '贵阳云岩XX酒店', complainant: '王磊', replyTime: '2026-02-27', content: '酒店房间床品有污渍、卫生间有异味，要求换房前台态度消极。' }),
+  // 3月
+  mkComplaint({ id: 'TS-20260308-0108', title: '在线平台预订服务缩水', city: '遵义市', district: '红花岗区', method: 'online_platform', category: 'online_travel', time: '2026-03-08', status: 'closed', respondent: 'XX在线旅游平台', complainant: '李娜', replyTime: '2026-03-15', content: '平台预订酒店宣传"含双早"，入住后酒店称无此服务，涉嫌虚假宣传，要求退差价。' }),
+  mkComplaint({ id: 'TS-20260315-0109', title: '酒店节假日价格虚高', city: '毕节市', district: '七星关区', method: 'hotline_12345', category: 'accommodation', time: '2026-03-15', status: 'closed', respondent: '毕节XX商务酒店', complainant: '张伟', replyTime: '2026-03-22', content: '酒店临时涨价且价格虚高，与预订价格不符，拒绝按原订单价格履行。' }),
+  mkComplaint({ id: 'TS-20260322-0110', title: '购物店商品未明码标价', city: '黔南布依族苗族自治州', district: '荔波县', method: 'hotline_12345', category: 'shopping', time: '2026-03-22', status: 'processing', respondent: '荔波XX土特产店', complainant: '刘洋', content: '购物店商品未明码标价，结账时价格虚高，与现场标示不符，要求退款。' }),
+  mkComplaint({ id: 'TS-20260328-0111', title: '咨询类来电（非投诉）', city: '贵阳市', method: 'phone', category: 'other', time: '2026-03-28', status: 'not_accepted', respondent: '无', complainant: '陈晨', content: '来电咨询旅游补贴政策办理流程，经甄别为咨询类事项，不属于投诉受理范围，已转咨询电话答复。' }),
+  // 4月
+  mkComplaint({ id: 'TS-20260405-0112', title: '旅行社擅自变更行程', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'travel_agency', time: '2026-04-05', status: 'closed', respondent: '贵州云游黔程旅行社', complainant: '杨光', replyTime: '2026-04-14', content: '清明节行程中旅行社擅自变更行程，两个约定景点被替换为购物点，涉嫌违反合同约定。' }),
+  mkComplaint({ id: 'TS-20260406-0113', title: '景区门票优惠政策未落实', city: '安顺市', district: '龙宫镇', method: 'hotline_12345', category: 'scenic_area', time: '2026-04-06', status: 'closed', respondent: '龙宫旅游景区', complainant: '周杰', replyTime: '2026-04-13', content: '龙宫旅游景区窗口售票人员未主动告知优惠政策，儿童票按成人票收取，乱收费。' }),
+  mkComplaint({ id: 'TS-20260410-0114', title: '旅游包车涉嫌超载运营', city: '铜仁市', district: '江口县', method: 'online_platform', category: 'transportation', time: '2026-04-10', status: 'transferred', respondent: '江口XX客运公司', complainant: '吴倩', transferred: true, suspectedIssue: '客运包车招揽包车合同以外的旅客并超载，涉嫌违反《道路旅客运输及客运站管理规定》', transferDept: '交通运输执法部门', transferTheme: '旅游交通客运', content: '梵净山旅游专线车辆超载行驶，核载33人实际载客40人，存在严重安全隐患。' }),
+  mkComplaint({ id: 'TS-20260418-0115', title: '导游车上兜售商品', city: '贵阳市', district: '花溪区', method: 'phone', category: 'tour_guide', time: '2026-04-18', status: 'closed', respondent: '导游刘某（D-5201-000312）', complainant: '王芳', replyTime: '2026-04-25', content: '导游在车上长时间兜售土特产，不购买的游客被安排在车辆后排座位。' }),
+  // 5月（五一）
+  mkComplaint({ id: 'TS-20260501-0116', title: '五一行程擅自增加购物店', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'travel_agency', time: '2026-05-01', status: 'closed', respondent: '贵州悠悠印象旅行社', complainant: '李强', replyTime: '2026-05-12', content: '五一期间参加三日游，贵州悠悠印象旅行社擅自压缩景点游览时间，增加两个购物店。' }),
+  mkComplaint({ id: 'TS-20260502-0117', title: '五一景区购票排队超3小时', city: '安顺市', district: '镇宁布依族苗族自治县', method: 'hotline_12345', category: 'scenic_area', time: '2026-05-02', status: 'closed', respondent: '黄果树瀑布景区', complainant: '张敏', replyTime: '2026-05-10', content: '五一假期黄果树瀑布景区人流量大，购票排队超3小时，现场秩序维护不到位。' }),
+  mkComplaint({ id: 'TS-20260503-0118', title: '景区内商户强制消费', city: '黔东南苗族侗族自治州', district: '雷山县', method: 'phone', category: 'scenic_area', time: '2026-05-03', status: 'transferred', respondent: '西江千户苗寨景区', complainant: '刘军', transferred: true, suspectedIssue: '景区内商户强制消费，涉嫌违反《旅游法》第三十五条', transferDept: '市场监管部门', transferTheme: '价格秩序及商品经营', content: '西江千户苗寨景区内商户强制消费，不购买银饰不让通过游线，疑似与导游串通。' }),
+  mkComplaint({ id: 'TS-20260504-0119', title: '节假日酒店拒绝按预订价入住', city: '贵阳市', district: '观山湖区', method: 'hotline_12345', category: 'accommodation', time: '2026-05-04', status: 'closed', respondent: '贵阳观山湖XX酒店', complainant: '陈丽', replyTime: '2026-05-13', content: '节假日酒店房价临时上涨且拒绝按预订价入住，要求退款被拒。' }),
+  mkComplaint({ id: 'TS-20260505-0120', title: '景区观光车调度混乱', city: '六盘水市', district: '盘州市', method: 'online_platform', category: 'scenic_area', time: '2026-05-05', status: 'closed', respondent: '乌蒙大草原景区', complainant: '刘一鸣', replyTime: '2026-05-14', content: '景区观光车调度混乱，游客长时间滞留，且安全提示不到位。' }),
+  // 6月
+  mkComplaint({ id: 'TS-20260608-0121', title: '自费项目未提前告知', city: '贵阳市', district: '云岩区', method: 'hotline_12345', category: 'travel_agency', time: '2026-06-08', status: 'closed', respondent: '贵州鑫旺旅行社', complainant: '陈静', replyTime: '2026-06-15', content: '贵州鑫旺旅行社行程中自费项目未提前告知，现场强制收取费用。' }),
+  mkComplaint({ id: 'TS-20260614-0122', title: '景区门票捆绑销售', city: '黔西南布依族苗族自治州', district: '兴义市', method: 'hotline_12345', category: 'scenic_area', time: '2026-06-14', status: 'closed', respondent: '万峰林景区', complainant: '杨帆', replyTime: '2026-06-20', content: '万峰林景区门票捆绑销售观光车票，不允许单买门票，涉嫌乱收费。' }),
+  mkComplaint({ id: 'TS-20260620-0123', title: '"纯玩团"实际含购物点', city: '安顺市', district: '西秀区', method: 'phone', category: 'travel_agency', time: '2026-06-20', status: 'replied', respondent: '贵州头等舱旅行社', complainant: '周婷', replyTime: '2026-06-28', content: '贵州头等舱旅行社宣传"纯玩无购物"行程实际含两个购物点，要求退差价并道歉。' }),
+  mkComplaint({ id: 'TS-20260626-0124', title: '民宿到店无房要求加价', city: '铜仁市', district: '江口县', method: 'hotline_12345', category: 'accommodation', time: '2026-06-26', status: 'pending', respondent: '江口XX民宿', complainant: '吴刚', content: '预订民宿到店后被告知无房，商家要求加价换房，拒绝退款。' }),
+  // 7月（暑期旺季）
+  mkComplaint({ id: 'TS-20260703-0125', title: '研学团行程与宣传不符', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'travel_agency', time: '2026-07-03', status: 'closed', respondent: '贵州悠悠印象旅行社', complainant: '郑洁', replyTime: '2026-07-10', content: '暑期研学团行程与宣传不符，承诺的研学课程未开展，涉嫌虚假宣传。' }),
+  mkComplaint({ id: 'TS-20260705-0126', title: '旅行社未出团拖延退定金', city: '贵阳市', district: '云岩区', method: 'hotline_12345', category: 'travel_agency', time: '2026-07-05', status: 'processing', respondent: '贵州鑫旺旅行社', complainant: '王磊', content: '缴纳定金后贵州鑫旺旅行社未按约定出团，要求退还定金一直被拖延。' }),
+  mkComplaint({ id: 'TS-20260708-0127', title: '景区限流公告不及时', city: '安顺市', district: '镇宁布依族苗族自治县', method: 'hotline_12345', category: 'scenic_area', time: '2026-07-08', status: 'closed', respondent: '黄果树瀑布景区', complainant: '李娜', replyTime: '2026-07-15', content: '暑期高峰黄果树瀑布景区限流措施公告不及时，游客到场无法入园，退票流程繁琐。' }),
+  mkComplaint({ id: 'TS-20260710-0128', title: '导游强制购物并辱骂游客', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'tour_guide', time: '2026-07-10', status: 'transferred', respondent: '导游张某（D-5201-000456）', complainant: '张伟', transferred: true, suspectedIssue: '强迫购物并辱骂游客，涉嫌违反《旅游法》第三十五条', transferDept: '市场监管部门', transferTheme: '价格秩序及商品经营', content: '导游在购物店强制要求购物，对不购物的游客言语辱骂，态度极其恶劣。' }),
+  mkComplaint({ id: 'TS-20260712-0129', title: '夜游景区排队久无疏导', city: '黔东南苗族侗族自治州', district: '雷山县', method: 'online_platform', category: 'scenic_area', time: '2026-07-12', status: 'closed', respondent: '西江千户苗寨景区', complainant: '刘洋', replyTime: '2026-07-19', content: '暑期夜游西江千户苗寨排队时间过长，观景台限流但无工作人员疏导。' }),
+  mkComplaint({ id: 'TS-20260715-0130', title: '行程酒店降级要求退差价', city: '遵义市', district: '汇川区', method: 'hotline_12345', category: 'travel_agency', time: '2026-07-15', status: 'closed', respondent: '贵州瀚博国际旅行社', complainant: '陈晨', replyTime: '2026-07-22', content: '行程中酒店被降级为快捷酒店，与合同约定的星级不符，要求退差价。' }),
+  mkComplaint({ id: 'TS-20260717-0131', title: '玉器店价格虚高疑设购物陷阱', city: '贵阳市', district: '南明区', method: 'phone', category: 'shopping', time: '2026-07-17', status: 'closed', respondent: '贵阳XX珠宝店', complainant: '杨光', replyTime: '2026-07-24', content: '玉器店商品价格虚高，标价与实际支付金额不符，疑似团队购物陷阱，要求退款。' }),
+  mkComplaint({ id: 'TS-20260719-0132', title: '溶洞景区排队拥堵', city: '毕节市', district: '织金县', method: 'hotline_12345', category: 'scenic_area', time: '2026-07-19', status: 'closed', respondent: '织金洞景区', complainant: '周杰', replyTime: '2026-07-26', content: '织金洞景区洞内排队拥堵，讲解服务缩水，应急疏散通道不畅通。' }),
+  mkComplaint({ id: 'TS-20260722-0133', title: '网上订单被单方取消加价', city: '安顺市', district: '西秀区', method: 'online_platform', category: 'travel_agency', time: '2026-07-22', status: 'closed', respondent: '贵州云游黔程旅行社', complainant: '吴倩', replyTime: '2026-07-29', content: '网上预订的行程被贵州云游黔程旅行社单方取消，临时加价才能出行，且拒绝退款。' }),
+  mkComplaint({ id: 'TS-20260724-0134', title: '景区摆渡车长时间等待', city: '黔南布依族苗族自治州', district: '荔波县', method: 'phone', category: 'scenic_area', time: '2026-07-24', status: 'closed', respondent: '荔波小七孔景区', complainant: '王芳', replyTime: '2026-07-31', content: '荔波小七孔景区摆渡车等待时间过长，游客长时间暴晒，现场无遮阳设施。' }),
+  mkComplaint({ id: 'TS-20260726-0135', title: '度假酒店设施老化卫生差', city: '六盘水市', district: '钟山区', method: 'hotline_12345', category: 'accommodation', time: '2026-07-26', status: 'processing', respondent: '六盘水XX度假酒店', complainant: '李强', content: '酒店设施老化，热水供应不稳定，房间卫生状况差，要求换房被拒。' }),
+  mkComplaint({ id: 'TS-20260730-0136', title: '演出临时取消拒绝退款', city: '贵阳市', district: '观山湖区', method: 'online_platform', category: 'entertainment', time: '2026-07-30', status: 'closed', respondent: '贵阳XX演艺中心', complainant: '张敏', replyTime: '2026-08-05', content: '演出场次被临时取消，票务方拒绝退款，退改规则不合理。' }),
+  // 8月（暑期）
+  mkComplaint({ id: 'TS-20260803-0137', title: '拼团游被转卖服务缩水', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'travel_agency', time: '2026-08-03', status: 'closed', respondent: '贵州头等舱旅行社', complainant: '刘军', replyTime: '2026-08-10', content: '拼团游被贵州头等舱旅行社转卖给其他旅行社，行程服务大打折扣，导游服务态度差。' }),
+  mkComplaint({ id: 'TS-20260808-0138', title: '景区停车难引导标识不清', city: '安顺市', district: '龙宫镇', method: 'hotline_12345', category: 'scenic_area', time: '2026-08-08', status: 'closed', respondent: '龙宫旅游景区', complainant: '陈丽', replyTime: '2026-08-14', content: '龙宫旅游景区停车难，引导标识不清晰，停车收费无公示。' }),
+  mkComplaint({ id: 'TS-20260812-0139', title: '特产超市强制消费', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'shopping', time: '2026-08-12', status: 'transferred', respondent: '贵阳XX特产超市', complainant: '刘一鸣', transferred: true, suspectedIssue: '强制交易，涉嫌违反《消费者权益保护法》', transferDept: '市场监管部门', transferTheme: '价格秩序及商品经营', content: '旅游团被带至特产超市强制消费，不购物的游客不被允许离店。' }),
+  mkComplaint({ id: 'TS-20260818-0140', title: '古镇商铺未明码标价', city: '贵阳市', district: '花溪区', method: 'hotline_12345', category: 'scenic_area', time: '2026-08-18', status: 'closed', respondent: '青岩古镇景区', complainant: '陈静', replyTime: '2026-08-25', content: '青岩古镇景区内商铺商品未明码标价，价格虚高，与宣传不符。' }),
+  mkComplaint({ id: 'TS-20260820-0141', title: '导游擅自增加自费项目', city: '贵阳市', district: '南明区', method: 'phone', category: 'tour_guide', time: '2026-08-20', status: 'processing', respondent: '导游杨某（D-5226-000789）', complainant: '杨帆', content: '黄果树一日游导游擅自增加自费项目，未参加的游客被留在车上等待。' }),
+  mkComplaint({ id: 'TS-20260821-0142', title: '行程缩水承诺景点未游览', city: '贵阳市', district: '云岩区', method: 'hotline_12345', category: 'travel_agency', time: '2026-08-21', status: 'processing', respondent: '贵州瀚博国际旅行社', complainant: '周婷', content: '行程严重缩水，合同承诺的两个景点未游览，导游解释敷衍，要求退差价。' }),
+  mkComplaint({ id: 'TS-20260825-0143', title: '报名后临时涨价拒绝退款', city: '贵阳市', district: '南明区', method: 'hotline_12345', category: 'travel_agency', time: '2026-08-25', status: 'pending', respondent: '贵州云游黔程旅行社', complainant: '吴刚', content: '报名旅游团后被告知临时涨价，不接受就扣除违约金，要求退款被拒。' }),
+  // V1.6 转办/移送问题线索扩充（报表"投诉转办情况"章演示数据，部门/主题口径参照省厅通报）
+  mkComplaint({ id: 'TS-20260220-0144', title: '景区商户未明码标价涉嫌欺客宰客', city: '安顺市', district: '镇宁布依族苗族自治县', method: 'hotline_12345', category: 'scenic_area', time: '2026-02-20', status: 'closed', respondent: '黄果树瀑布景区周边商户', complainant: '徐婷', transferred: true, suspectedIssue: '未明码标价、涉嫌欺客宰客，涉嫌违反《价格法》', transferDept: '市场监管部门', transferTheme: '价格秩序及商品经营', replyTime: '2026-03-10', content: '景区周边餐饮商户未明码标价，结账价格远高于标示价，涉嫌欺客宰客。' }),
+  mkComplaint({ id: 'TS-20260318-0145', title: '古镇商铺价格欺诈', city: '贵阳市', district: '花溪区', method: 'phone', category: 'shopping', time: '2026-03-18', status: 'closed', respondent: '青岩古镇XX银饰店', complainant: '孙悦', transferred: true, suspectedIssue: '标价与实际结算不符涉嫌价格欺诈，涉嫌违反《价格法》', transferDept: '市场监管部门', transferTheme: '价格秩序及商品经营', replyTime: '2026-04-02', content: '商铺以低价标示招揽，结算时高价收取且不提供票据，涉嫌价格欺诈。' }),
+  mkComplaint({ id: 'TS-20260326-0150', title: '购物店以次充好虚假宣传', city: '黔东南苗族侗族自治州', district: '雷山县', method: 'online_platform', category: 'shopping', time: '2026-03-26', status: 'transferred', respondent: '西江千户苗寨XX银器店', complainant: '胡兵', transferred: true, suspectedIssue: '以次充好、虚假宣传，涉嫌违反《消费者权益保护法》', transferDept: '市场监管部门', transferTheme: '价格秩序及商品经营', content: '所购银器经鉴定为镀银铜器，商家虚假宣传"足银999"，要求查处。' }),
+  mkComplaint({ id: 'TS-20260422-0146', title: '旅行社服务网点涉嫌超范围经营', city: '贵阳市', district: '南明区', method: 'phone', category: 'travel_agency', time: '2026-04-22', status: 'transferred', respondent: '贵州盈科旅行社服务网点', complainant: '袁媛', transferred: true, suspectedIssue: '服务网点销售旅游鞋涉嫌超范围经营', transferDept: '市场监管部门', transferTheme: '旅行社资质及经营规范', content: '旅行社服务网点门市长期摆卖旅游鞋等商品，涉嫌超出许可经营范围经营。' }),
+  mkComplaint({ id: 'TS-20260520-0148', title: '旅游项目资金使用问题线索', city: '贵阳市', district: '云岩区', method: 'phone', category: 'other', time: '2026-05-20', status: 'transferred', respondent: '贵州XX文旅项目公司', complainant: '秦峰', transferred: true, suspectedIssue: '反映旅游项目补助资金使用不规范', transferTheme: '项目资金管理', content: '反映某文旅项目补助资金使用不规范，具体移送部门待进一步核实明确。' }),
+  mkComplaint({ id: 'TS-20260610-0147', title: '景区直升机驾驶员未持有效执照飞行', city: '铜仁市', district: '江口县', method: 'online_platform', category: 'entertainment', time: '2026-06-10', status: 'transferred', respondent: '梵净山低空游览运营公司', complainant: '曹磊', transferred: true, suspectedIssue: '直升机驾驶员未持有效驾驶员执照飞行、景区运营主体审核把关不严，涉嫌违反《民用航空法》', transferDept: '公安机关', transferTheme: '安全管理及飞行资质', content: '景区观光直升机驾驶员无法出示有效执照，景区运营主体审核把关不严，存在重大安全隐患。' }),
+  mkComplaint({ id: 'TS-20260628-0149', title: '景区运营公司驾驶员未落实预约下单', city: '铜仁市', district: '江口县', method: 'phone', category: 'transportation', time: '2026-06-28', status: 'transferred', respondent: '贵州梵净山旅游商务服务有限公司', complainant: '沈飞', transferred: true, suspectedIssue: '多名驾驶员未落实网约车预约下单，反映监管失职问题', transferDept: '纪检监察机关', transferTheme: '其他/未注明', content: '景区接驳车辆多名驾驶员未落实网约车预约下单要求，反映相关部门监管失职。' }),
+  mkComplaint({ id: 'TS-20260706-0151', title: '在线平台门票加价销售', city: '安顺市', district: '西秀区', method: 'online_platform', category: 'online_travel', time: '2026-07-06', status: 'transferred', respondent: 'XX在线旅游平台', complainant: '韩雪', transferred: true, suspectedIssue: '平台加价销售景区门票且价格公示不规范，涉嫌违反《价格法》', transferDept: '市场监管部门', transferTheme: '价格秩序及商品经营', content: '在线平台销售的龙宫景区门票加价明显且未公示价格构成，涉嫌违规加价。' }),
+];
+
 export const MockComplaints: Complaint[] = [
   {
     id: 'TS-20260801-0001',
@@ -780,6 +893,9 @@ export const MockComplaints: Complaint[] = [
     handlerOpinion: '经调查，导游李某确实存在强制购物行为。已将情况通报旅游执法大队，拟对李某进行行政处罚。',
     reviewerOpinion: '同意办理意见，依法依规处理。',
     isTransferredToCase: true,
+    isTransferred: true,
+    transferDepartment: '公安机关',
+    transferTheme: '价格秩序及商品经营',
     suspectedIssue: '导游强制购物，违反《旅游法》第三十五条',
     replyStatus: 'replied',
     replyTime: '2026-08-01',
@@ -895,6 +1011,9 @@ export const MockComplaints: Complaint[] = [
     handlerOpinion: '涉嫌违反道路交通安全法规，已转交交通运输执法部门处理。',
     reviewerOpinion: '同意转办。',
     isTransferredToCase: true,
+    isTransferred: true,
+    transferDepartment: '交通运输执法部门',
+    transferTheme: '旅游交通客运',
     suspectedIssue: '客车超载，违反《道路交通安全法》',
     replyStatus: 'none',
     attachments: [
@@ -996,6 +1115,8 @@ export const MockComplaints: Complaint[] = [
     updateTime: '2026-08-19 11:00:00',
     operationLogs: [{ id: 'ol19', operator: '管理员', action: 'create', summary: '录入投诉信息', time: '2026-08-19 11:00:00' }],
   },
+  // V1.4：扩充的全年分布数据（1-8月，7-8月旺季集中，含移送线索与重复投诉商家）
+  ...extraComplaints,
 ];
 
 // ========== 团信息预设数据（模拟用户提前填报的团信息） ==========
@@ -2120,9 +2241,11 @@ export const MockSubsidyApplications: SubsidyApplication[] = [
     app.legalRepresentative = '张文华';
     app.contactPhone = '0851-85888888';
     app.bankAccount = { accountName: '贵州阳光国际旅行社', bankName: '中国工商银行贵阳分行', accountNo: '2402000109201088888' };
-    // 东盟国家：25人 × 30元 = 750元
-    app.teamReceptionRows[1].amount = 750;
-    app.teamReceptionRows[1].teamSize = 25;
+    // 已填写旅游宣传奖励：参展推广奖励（参会派遣25人）——三大奖励项互斥，与记录1/2分别覆盖三类
+    app.culturePromotionRows[0].amount = 750;
+    app.culturePromotionRows[0].activityName = '2026新加坡国际旅游博览会（贵州文旅推介展位）';
+    app.culturePromotionRows[0].location = '新加坡';
+    app.culturePromotionRows[0].participants = 25;
     app.totalAmount = 750;
     return app;
   })(),
@@ -2143,88 +2266,78 @@ export const MockSubsidyOperationLogs: SubsidyOperationLog[] = [
 // ========== Mock 投诉数据报表 ==========
 export const MockComplaintReportTemplates: ComplaintReportTemplate[] = getDefaultReportTemplates();
 
-export const MockSeasonCalendar: ComplaintSeasonCalendarItem[] = getDefaultSeasonCalendar();
-
+// V1.4：种子报表为三种典型周期示例（整月/跨周/单日），不再区分报表类型
 export const MockComplaintReports: ComplaintReport[] = [
   (() => {
-    const periodStart = '2026-08-01';
-    const periodEnd = '2026-08-31';
+    const periodStart = '2026-07-01';
+    const periodEnd = '2026-07-31';
     const scopeName = '全省';
     const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
-    // V1.3：AI 归因结论（规则计算块已在上文展示数据，此处仅做综合研判结论）
-    const topMerchant = snapshot.respondentClusters[0];
-    const topRegionCat = snapshot.regionCategoryClusters[0];
-    const aiInsight = `<p style="margin:0 0 8px">综合上述规则分析，本期投诉态势<b style="color:#d4380d">需重点关注</b>。核心风险集中在"${topMerchant?.name || '上述商家'}"（${topMerchant?.count || 0}次重复投诉），呈现"同一主体反复违规"特征，疑为内部管理失效而非个案。${topRegionCat ? `${topRegionCat.region}${topRegionCat.categoryLabel}领域同类投诉集聚（${topRegionCat.count}件），反映该区域该业态存在共性问题。` : ''}</p>`;
+    const aiInsight = `<p style="margin:0 0 8px">综合本期数据，全省投诉主要集中在旅行社违约违规与景区管理服务两大领域，暑期（7月）投诉量较前期明显上升，与旅游旺季游客规模增长相符。</p>
+<p style="margin:0">建议对重复投诉商家开展集中约谈，督促重点景区在高峰期加强排队秩序与停车管理，并对本期移送的问题线索处置进展跟踪督办。</p>`;
     return {
-      id: 'RPT-20260824-0001',
-      title: '2026年8月 投诉月报（贵州省）',
-      reportType: 'low_season_month' as const,
+      id: 'RPT-20260801-0001',
+      title: buildReportTitle(periodStart, periodEnd, scopeName),
       periodStart,
       periodEnd,
       scopeLevel: 'province' as const,
       scopeName,
-      generatedBy: '系统',
-      generatedAt: '2026-08-24 10:05:00',
-      summary: buildReportSummary(snapshot, 'low_season_month', scopeName),
+      generatedBy: '陈华',
+      generatedAt: '2026-08-01 10:05:00',
+      summary: buildReportSummary(snapshot, scopeName),
       hasAiInsight: true,
       aiInsight,
       status: snapshot.total === 0 ? 'empty' : 'normal',
-      templateId: 'TPL-LSM-001',
-      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.low_season_month)),
+      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)),
       snapshot,
-      trigger: 'scheduled' as const,
+      trigger: 'manual' as const,
     };
   })(),
   (() => {
-    const periodStart = '2026-08-15';
-    const periodEnd = '2026-08-21';
+    const periodStart = '2026-08-17';
+    const periodEnd = '2026-08-23';
     const scopeName = '贵阳市';
     const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
     const topMerchant = snapshot.respondentClusters[0];
-    const aiInsight = `<p style="margin:0">本周风险研判结论：贵阳市投诉${snapshot.total}件，${topMerchant ? `"${topMerchant.name}"连续${topMerchant.count}次被投诉，` : ''}环比${snapshot.momRate >= 0 ? '上升' : '下降'}${Math.abs(snapshot.momRate).toFixed(1)}%。${topMerchant ? '该商家近 30 天投诉呈集聚态势，存在违规惯性，建议升级为橙色风险并启动约谈+限期整改。' : ''}</p>`;
+    const aiInsight = `<p style="margin:0">本期贵阳市投诉${snapshot.total}件，${topMerchant ? `"${topMerchant.name}"被投诉${topMerchant.count}次，存在违规惯性，` : ''}环比${snapshot.momRate >= 0 ? '上升' : '下降'}${Math.abs(snapshot.momRate).toFixed(1)}%。建议对重点商家启动约谈并限期整改，跟踪移送线索处置进展。</p>`;
     return {
       id: 'RPT-20260824-0002',
-      title: '2026年8月第3周 投诉周报（贵阳市）',
-      reportType: 'peak_week' as const,
+      title: buildReportTitle(periodStart, periodEnd, scopeName),
       periodStart,
       periodEnd,
       scopeLevel: 'city' as const,
       scopeName,
-      generatedBy: '系统',
-      generatedAt: '2026-08-22 10:00:00',
-      summary: buildReportSummary(snapshot, 'peak_week', scopeName),
+      generatedBy: '李明',
+      generatedAt: '2026-08-24 09:30:00',
+      summary: buildReportSummary(snapshot, scopeName),
       hasAiInsight: true,
       aiInsight,
       status: snapshot.total === 0 ? 'empty' : 'normal',
-      templateId: 'TPL-PW-001',
-      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.peak_week)),
+      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)),
       snapshot,
-      trigger: 'scheduled' as const,
+      trigger: 'manual' as const,
     };
   })(),
   (() => {
-    const periodStart = '2026-08-01';
-    const periodEnd = '2026-08-01';
+    const periodStart = '2026-08-25';
+    const periodEnd = '2026-08-25';
     const scopeName = '全省';
     const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
-    const topMerchant = snapshot.respondentClusters[0];
-    const aiInsight = `<p style="margin:0">当日研判结论：受理${snapshot.total}件，${topMerchant ? `"${topMerchant.name}"为重点跟踪对象，` : ''}${snapshot.pending > 0 ? `${snapshot.pending}件待办需24小时内响应。` : '处置进度正常。'}建议次日重点复查高风险商家整改落实情况。</p>`;
+    const aiInsight = `<p style="margin:0">当日受理${snapshot.total}件，${snapshot.pending > 0 ? `${snapshot.pending}件待办需24小时内响应。` : '处置进度正常。'}建议次日跟踪重点商家整改落实情况。</p>`;
     return {
-      id: 'RPT-20260824-0003',
-      title: '2026-08-01 投诉日报（贵州省·紧急日报）',
-      reportType: 'important_day' as const,
+      id: 'RPT-20260826-0003',
+      title: buildReportTitle(periodStart, periodEnd, scopeName),
       periodStart,
       periodEnd,
       scopeLevel: 'province' as const,
       scopeName,
       generatedBy: '管理员',
-      generatedAt: '2026-08-01 18:30:00',
-      summary: buildReportSummary(snapshot, 'important_day', scopeName),
+      generatedAt: '2026-08-26 18:00:00',
+      summary: buildReportSummary(snapshot, scopeName),
       hasAiInsight: true,
       aiInsight,
       status: snapshot.total === 0 ? 'empty' : 'normal',
-      templateId: 'TPL-ID-001',
-      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS.important_day)),
+      chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)),
       snapshot,
       trigger: 'manual' as const,
     };
@@ -2232,9 +2345,9 @@ export const MockComplaintReports: ComplaintReport[] = [
 ];
 
 export const MockComplaintReportArchiveLogs: ComplaintReportArchiveLog[] = [
-  { archiveLogId: 'cral-1', reportId: 'RPT-20260824-0001', action: 'generate', operator: '系统', operatorLevel: 'province', operatedAt: '2026-08-24 10:05:00', detail: '定时任务自动生成（淡季月报模板）' },
-  { archiveLogId: 'cral-2', reportId: 'RPT-20260824-0001', action: 'preview', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-24 10:30:00', detail: '在线预览' },
-  { archiveLogId: 'cral-3', reportId: 'RPT-20260824-0001', action: 'export', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-24 11:20:00', detail: '导出 Word' },
-  { archiveLogId: 'cral-4', reportId: 'RPT-20260824-0002', action: 'generate', operator: '系统', operatorLevel: 'city', operatedAt: '2026-08-22 10:00:00', detail: '定时任务自动生成（旺季周报模板）' },
-  { archiveLogId: 'cral-5', reportId: 'RPT-20260824-0003', action: 'generate', operator: '管理员', operatorLevel: 'province', operatedAt: '2026-08-01 18:30:00', detail: '手动生成紧急日报' },
+  { archiveLogId: 'cral-1', reportId: 'RPT-20260801-0001', action: 'generate', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-01 10:05:00', detail: '手动生成报表（统计周期：2026年7月）' },
+  { archiveLogId: 'cral-2', reportId: 'RPT-20260801-0001', action: 'preview', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-01 10:30:00', detail: '在线预览' },
+  { archiveLogId: 'cral-3', reportId: 'RPT-20260801-0001', action: 'export', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-01 11:20:00', detail: '导出 Word' },
+  { archiveLogId: 'cral-4', reportId: 'RPT-20260824-0002', action: 'generate', operator: '李明', operatorLevel: 'city', operatedAt: '2026-08-24 09:30:00', detail: '手动生成报表（统计周期：8月17日至23日）' },
+  { archiveLogId: 'cral-5', reportId: 'RPT-20260826-0003', action: 'generate', operator: '管理员', operatorLevel: 'province', operatedAt: '2026-08-26 18:00:00', detail: '手动生成报表（统计周期：8月25日）' },
 ];

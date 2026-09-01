@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Application, Attachment, Complaint, Message, UserRole, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleStatus, OpinionHandleLog, SubsidyApplication, SubsidyOperationLog, ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog, ComplaintSeasonCalendarItem, ComplaintSeason } from '../types'
-import { getDefaultReportTemplates, getDefaultSeasonCalendar } from '../types'
-import { MockApplications, MockComplaints, MockMessages, MockEnterpriseCertificates, MockPublicOpinions, MockOpinionWarningRules, MockOpinionWarnings, MockOpinionReports, MockSubsidyApplications, MockSubsidyOperationLogs, MockComplaintReports, MockComplaintReportTemplates, MockSeasonCalendar, MockComplaintReportArchiveLogs } from '../mock/data'
+import type { Application, Attachment, Complaint, Message, UserRole, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleStatus, OpinionHandleLog, SubsidyApplication, SubsidyOperationLog, ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog } from '../types'
+import { getDefaultReportTemplates } from '../types'
+import { MockApplications, MockComplaints, MockMessages, MockEnterpriseCertificates, MockPublicOpinions, MockOpinionWarningRules, MockOpinionWarnings, MockOpinionReports, MockSubsidyApplications, MockSubsidyOperationLogs, MockComplaintReports, MockComplaintReportTemplates, MockComplaintReportArchiveLogs } from '../mock/data'
 import type {
   Vehicle,
   TrackPoint,
@@ -64,7 +64,6 @@ const DEMO_SNAPSHOT = {
   // 投诉数据报表
   complaintReports: deepClone(MockComplaintReports),
   complaintReportTemplates: deepClone(MockComplaintReportTemplates),
-  seasonCalendar: deepClone(MockSeasonCalendar),
   complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
   // 旅游包车智慧监管
   vehicles: deepClone(MockVehicles),
@@ -168,7 +167,6 @@ interface AppState {
   // ========== 投诉数据报表 ==========
   complaintReports: ComplaintReport[]
   complaintReportTemplates: ComplaintReportTemplate[]
-  seasonCalendar: ComplaintSeasonCalendarItem[]
   complaintReportArchiveLogs: ComplaintReportArchiveLog[]
   addComplaintReport: (report: ComplaintReport) => void
   deleteComplaintReport: (id: string) => void // 软删除（30 天内可恢复）
@@ -176,8 +174,6 @@ interface AppState {
   appendComplaintReportLog: (log: ComplaintReportArchiveLog) => void
   updateComplaintReportTemplate: (templateId: string, patch: Partial<ComplaintReportTemplate>) => void
   restoreDefaultTemplates: () => void
-  updateSeasonCalendar: (month: string, season: ComplaintSeason) => void
-  restoreDefaultSeasonCalendar: () => void
 
   // ========== 旅游包车智慧监管 ==========
   // 当前用户的监管层级（仅 final_reviewer / admin 角色启用）
@@ -316,11 +312,10 @@ export const useStore = create<AppState>()(
           opinionReports: [],
           subsidyApplications: [],
           subsidyOperationLogs: [],
-          // 投诉数据报表：清空报表与日志，保留默认模板与淡旺季日历
+          // 投诉数据报表：清空报表与日志，保留默认章节模板
           complaintReports: [],
           complaintReportArchiveLogs: [],
           complaintReportTemplates: getDefaultReportTemplates(),
-          seasonCalendar: getDefaultSeasonCalendar(),
           // 旅游包车智慧监管：仅清空业务数据，保留规则模板
           vehicles: [],
           tracks: [],
@@ -354,11 +349,10 @@ export const useStore = create<AppState>()(
           opinionReports: deepClone(DEMO_SNAPSHOT.opinionReports),
           subsidyApplications: deepClone(DEMO_SNAPSHOT.subsidyApplications),
           subsidyOperationLogs: deepClone(DEMO_SNAPSHOT.subsidyOperationLogs),
-          // 投诉数据报表
-          complaintReports: deepClone(DEMO_SNAPSHOT.complaintReports),
-          complaintReportTemplates: deepClone(DEMO_SNAPSHOT.complaintReportTemplates),
-          seasonCalendar: deepClone(DEMO_SNAPSHOT.seasonCalendar),
-          complaintReportArchiveLogs: deepClone(DEMO_SNAPSHOT.complaintReportArchiveLogs),
+        // 投诉数据报表
+        complaintReports: deepClone(DEMO_SNAPSHOT.complaintReports),
+        complaintReportTemplates: deepClone(DEMO_SNAPSHOT.complaintReportTemplates),
+        complaintReportArchiveLogs: deepClone(DEMO_SNAPSHOT.complaintReportArchiveLogs),
           // 旅游包车智慧监管
           vehicles: deepClone(DEMO_SNAPSHOT.vehicles),
           tracks: deepClone(DEMO_SNAPSHOT.tracks),
@@ -533,7 +527,6 @@ export const useStore = create<AppState>()(
       // ========== 投诉数据报表 ==========
       complaintReports: MockComplaintReports,
       complaintReportTemplates: MockComplaintReportTemplates,
-      seasonCalendar: MockSeasonCalendar,
       complaintReportArchiveLogs: MockComplaintReportArchiveLogs,
       addComplaintReport: (report) =>
         set((state) => ({ complaintReports: [report, ...state.complaintReports] })),
@@ -562,14 +555,6 @@ export const useStore = create<AppState>()(
         })),
       restoreDefaultTemplates: () =>
         set({ complaintReportTemplates: getDefaultReportTemplates() }),
-      updateSeasonCalendar: (month, season) =>
-        set((state) => ({
-          seasonCalendar: state.seasonCalendar.map((c) =>
-            c.month === month ? { ...c, season } : c,
-          ),
-        })),
-      restoreDefaultSeasonCalendar: () =>
-        set({ seasonCalendar: getDefaultSeasonCalendar() }),
 
       // ========== 旅游包车智慧监管 ==========
       // 默认省级视角（final_reviewer / admin 角色）
@@ -756,7 +741,7 @@ export const useStore = create<AppState>()(
       name: 'yqrq-store',
       // 数据版本：当 mock 数据结构发生变化时递增
       // 版本不匹配时，对应模块数据会被重置为最新 mock 数据
-      version: 10,
+      version: 14,
       migrate: (persistedState: any, version) => {
         // 版本 < 2：补贴管理 mock 数据结构调整（团队接待奖励由9行合并为3行）
         if (version < 2) {
@@ -788,7 +773,6 @@ export const useStore = create<AppState>()(
             ...persistedState,
             complaintReports: deepClone(MockComplaintReports),
             complaintReportTemplates: deepClone(MockComplaintReportTemplates),
-            seasonCalendar: deepClone(MockSeasonCalendar),
             complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
           }
         }
@@ -854,6 +838,44 @@ export const useStore = create<AppState>()(
             trainingMaterials: deepClone(MockTrainingMaterials),
           }
         }
+        // 版本 < 11：V1.4 报表重构——取消三类报表类型与淡旺季日历，报表由手动选择日期决定
+        // 重置投诉（扩充至 50 条）、报表（无类型新结构）与章节模板（单一通用模板），并清除已废弃的日历数据
+        if (version < 11) {
+          persistedState = {
+            ...persistedState,
+            complaints: deepClone(MockComplaints),
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+            complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
+          }
+          delete (persistedState as Record<string, unknown>).seasonCalendar
+        }
+        // 版本 < 12：V1.5 默认章节去掉"办理质量/移送问题线索"，交叉统计表改分组结构，重置报表与章节模板
+        if (version < 12) {
+          persistedState = {
+            ...persistedState,
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+          }
+        }
+        // 版本 < 13：V1.6 报表新增"投诉转办情况"章与图表解读段；投诉补充转办部门/主题字段，重置投诉、报表与章节模板
+        if (version < 13) {
+          persistedState = {
+            ...persistedState,
+            complaints: deepClone(MockComplaints),
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+          }
+        }
+        // 版本 < 14：补贴申报 mock 记录3奖励项由"入境旅游团队接待奖励"调整为"旅游宣传奖励"，
+        // 使三大互斥奖励项各有演示数据，重置补贴申报数据
+        if (version < 14) {
+          persistedState = {
+            ...persistedState,
+            subsidyApplications: deepClone(MockSubsidyApplications),
+            subsidyOperationLogs: deepClone(MockSubsidyOperationLogs),
+          }
+        }
         return persistedState
       },
       // 仅持久化数据字段，不持久化方法
@@ -871,7 +893,6 @@ export const useStore = create<AppState>()(
         // 投诉数据报表
         complaintReports: state.complaintReports,
         complaintReportTemplates: state.complaintReportTemplates,
-        seasonCalendar: state.seasonCalendar,
         complaintReportArchiveLogs: state.complaintReportArchiveLogs,
         // 旅游包车智慧监管
         coachRegionLevel: state.coachRegionLevel,
