@@ -4,6 +4,7 @@ import {
   TourismCategoryLabels,
   ComplaintStatusLabels,
   ReplyStatusLabels,
+  GUIZHOU_CITIES,
   type ComplaintReport,
   type ComplaintReportSnapshot,
   type Complaint,
@@ -40,6 +41,7 @@ function normalizeSnapshot(s: any): ComplaintReportSnapshot {
       suspectedIssue: c?.suspectedIssue ?? '',
       statusLabel: c?.statusLabel ?? '',
       region: c?.region ?? '未知',
+      city: c?.city ?? '未知',
       department: c?.department ?? '其他/未注明',
       theme: c?.theme ?? '其他/未注明',
     })),
@@ -140,10 +142,9 @@ function enumStats(items: { label: string; count: number }[], total: number, max
 }
 
 function coreMetricsNote(s: ComplaintReportSnapshot): string {
-  if (s.total === 0) return '本期统计范围内无投诉数据，各项核心指标均为空，旅游市场整体运行平稳。'
-  const repeatMerchantCount = s.respondentClusters.length
+  if (s.total === 0) return '本期统计范围内无投诉数据，各项指标均为空，旅游市场整体运行平稳。'
   const topRegion = s.regionStats[0]
-  return `本期共受理旅游投诉${s.total}件，其中待办${s.pending}件、已办结${s.closedCount}件。${repeatMerchantCount > 0 ? `被重复投诉（≥2次）商家${repeatMerchantCount}家，需重点关注系统性经营问题；` : ''}投诉量最高的区域为${topRegion?.name ?? '-'}。待办量反映本期处置压力，办结率仅作参考指标、不作核心考核。`
+  return `本期共受理旅游投诉${s.total}件，其中未办结${s.pending}件、已办结${s.closedCount}件。投诉量最高的区域为${topRegion?.name ?? '-'}。未办结量反映本期处置压力，办结率仅作参考指标、不作核心考核。`
 }
 
 function methodNote(s: ComplaintReportSnapshot): string {
@@ -218,12 +219,11 @@ function transferredCasesNote(s: ComplaintReportSnapshot): string {
 }
 
 function coreMetricsHtml(s: ComplaintReportSnapshot): string {
-  const repeatMerchantCount = s.respondentClusters.length
   const topRegionName = s.regionStats[0]?.name || '-'
   return `<div style="display:flex;gap:12px">
     <div style="flex:1;background:#f0f5ff;border:1px solid #adc6ff;border-radius:6px;padding:16px;text-align:center"><div style="font-size:28px;font-weight:700;color:#1677ff">${s.total}</div><div style="color:#666;margin-top:4px">投诉总量（件）</div></div>
-    <div style="flex:1;background:#fff7e6;border:1px solid #ffd591;border-radius:6px;padding:16px;text-align:center"><div style="font-size:28px;font-weight:700;color:#fa8c16">${repeatMerchantCount}</div><div style="color:#666;margin-top:4px">重复投诉商家数（家）</div></div>
-    <div style="flex:1;background:#f6ffed;border:1px solid #b7eb8f;border-radius:6px;padding:16px;text-align:center"><div style="font-size:28px;font-weight:700;color:#52c41a">${s.pending}</div><div style="color:#666;margin-top:4px">待办件数（件）</div></div>
+    <div style="flex:1;background:#fff7e6;border:1px solid #ffd591;border-radius:6px;padding:16px;text-align:center"><div style="font-size:28px;font-weight:700;color:#fa8c16">${s.pending}</div><div style="color:#666;margin-top:4px">未办结数（件）</div></div>
+    <div style="flex:1;background:#f6ffed;border:1px solid #b7eb8f;border-radius:6px;padding:16px;text-align:center"><div style="font-size:28px;font-weight:700;color:#52c41a">${s.closedCount}</div><div style="color:#666;margin-top:4px">已办结数（件）</div></div>
   </div>
   <div style="margin-top:8px;color:#666;font-size:11px">高发区域：${topRegionName} ｜ 办结率 ${s.closedRate.toFixed(1)}%（仅作参考，不作核心考核指标）</div>`
 }
@@ -325,26 +325,28 @@ function transferredCasesHtml(s: ComplaintReportSnapshot): string {
 
 // 投诉转办情况（V1.6 参照附件报告"移送问题线索情况"：移送部门区域交叉统计表 + 分区域文字解读）
 // V1.7：按需求移除"（二）按线索主题统计"表，主题仅作为分区域解读中的描述性信息保留
+// V1.8：交叉表横排地区固定为贵州九市州名称（贵阳市、遵义市……），线索按所属市州归列
 function transferAnalysisHtml(s: ComplaintReportSnapshot): string {
   const cases = s.transferredCases
   if (cases.length === 0) {
     return '<p style="line-height:1.8;text-indent:2em">本期统计范围内无转办、移送问题线索投诉，各渠道诉求均在文旅部门职责范围内受理处置。</p>'
   }
   const total = cases.length
-  // 区域列（县级优先），按合计降序
-  const regionCount = new Map<string, number>()
-  cases.forEach((c) => regionCount.set(c.region, (regionCount.get(c.region) || 0) + 1))
-  const regions = Array.from(regionCount.entries()).sort((a, b) => b[1] - a[1]).map(([name]) => name)
-  // 部门 / 主题 维度统计与区域交叉
+  // 横排地区固定为贵州九市州；个别线索市州缺失/异常时在末尾补充额外列，保证合计不缺漏
+  const cityCount = new Map<string, number>()
+  cases.forEach((c) => cityCount.set(c.city, (cityCount.get(c.city) || 0) + 1))
+  const extraCities = Array.from(cityCount.keys()).filter((name) => !GUIZHOU_CITIES.includes(name))
+  const regions = [...GUIZHOU_CITIES, ...extraCities]
+  // 部门 / 主题 维度统计与市州交叉
   const dimCount: Record<'department' | 'theme', Map<string, number>> = {
     department: new Map(),
     theme: new Map(),
   }
-  const cross = new Map<string, number>() // `区域|维度值` -> 条数
+  const cross = new Map<string, number>() // `市州|维度值` -> 条数
   cases.forEach((c) => {
     ;(['department', 'theme'] as const).forEach((key) => {
       dimCount[key].set(c[key], (dimCount[key].get(c[key]) || 0) + 1)
-      const k = `${c.region}|${c[key]}`
+      const k = `${c.city}|${c[key]}`
       cross.set(k, (cross.get(k) || 0) + 1)
     })
   })
@@ -367,12 +369,12 @@ function transferAnalysisHtml(s: ComplaintReportSnapshot): string {
       .join('')
     return `<div style="color:#666;font-size:11px;margin:4px 0 6px">${dimLabel}</div>
       <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px"><thead><tr>
-        <th style="width:${Math.max(18, 46 - regions.length * 4)}%;${th}">${key === 'department' ? '移送或涉及部门' : '线索主题'}</th>
+        <th style="width:${Math.max(18, 46 - regions.length * 3)}%;${th}">${key === 'department' ? '移送或涉及部门' : '线索主题'}</th>
         ${headCells}<th style="${th}">合计（条）</th>
       </tr></thead><tbody>${bodyRows}</tbody></table>`
   }
 
-  // 文字解读：总体 + 部门 + 分区域（参照附件公文写法；主题作为区域解读中的描述信息）
+  // 文字解读：总体 + 部门 + 分市州（参照附件公文写法；主题作为区域解读中的描述信息）
   const join条 = (entries: [string, number][], max = 5) =>
     entries.slice(0, max).map(([name, count]) => `${name}${count}条`).join('、')
   const deptEntries = sortedDim('department')
@@ -380,22 +382,25 @@ function transferAnalysisHtml(s: ComplaintReportSnapshot): string {
   const ratio = s.total > 0 ? ((total / s.total) * 100).toFixed(2) : '-'
   const paras: string[] = []
   paras.push(`本期共转办、移送问题线索${total}条，占投诉总量的${ratio}%。按移送或涉及部门看，主要为${join条(deptEntries)}。其中${deptEntries[0][0]}受理线索最多，反映市场监管、消费维权类事项仍是跨部门移送的主要事项。`)
-  const regionParas = regions.slice(0, 5).map((rg) => {
-    const count = regionCount.get(rg) || 0
-    const topTheme = themeEntries
-      .filter(([name]) => cases.some((c) => c.region === rg && c.theme === name))
-      .sort((a, b) => (cross.get(`${rg}|${b[0]}`) || 0) - (cross.get(`${rg}|${a[0]}`) || 0))[0]
-    const topDept = deptEntries
-      .filter(([name]) => cases.some((c) => c.region === rg && c.department === name))
-      .sort((a, b) => (cross.get(`${rg}|${b[0]}`) || 0) - (cross.get(`${rg}|${a[0]}`) || 0))[0]
-    return `${rg}共有移送问题线索${count}条，主要为${topTheme ? `"${topTheme[0]}"类（${cross.get(`${rg}|${topTheme[0]}`) || 0}条）` : '其他事项'}，已按职责移送${topDept ? topDept[0] : '相关部门'}处置。`
-  })
+  const regionParas = Array.from(cityCount.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([rg, count]) => {
+      const topTheme = themeEntries
+        .filter(([name]) => cases.some((c) => c.city === rg && c.theme === name))
+        .sort((a, b) => (cross.get(`${rg}|${b[0]}`) || 0) - (cross.get(`${rg}|${a[0]}`) || 0))[0]
+      const topDept = deptEntries
+        .filter(([name]) => cases.some((c) => c.city === rg && c.department === name))
+        .sort((a, b) => (cross.get(`${rg}|${b[0]}`) || 0) - (cross.get(`${rg}|${a[0]}`) || 0))[0]
+      return `${rg}共有移送问题线索${count}条，主要为${topTheme ? `"${topTheme[0]}"类（${cross.get(`${rg}|${topTheme[0]}`) || 0}条）` : '其他事项'}，已按职责移送${topDept ? topDept[0] : '相关部门'}处置。`
+    })
   paras.push(...regionParas)
 
   return `${crossTable('按移送或涉及部门统计', 'department')}${paras.map((p) => `<p style="line-height:1.8;text-indent:2em;margin:0 0 6px">${p}</p>`).join('')}`
 }
 
-// 问题分析（V1.4 公文体："一是/二是/三是/四是"特点归纳 + 风险分级 + 典型案例 + AI 归因占位）
+// 问题分析（V1.4 公文体："一是/二是/三是/四是"特点归纳 + 风险分级 + 典型案例）
+// V1.8：仅移除"AI 归因结论"占位与提示文字，问题分析正文保留
 function aiInsightHtml(report: ComplaintReport): string {
   const s = normalizeSnapshot(report.snapshot)
   const paras: string[] = []
@@ -444,17 +449,7 @@ function aiInsightHtml(report: ComplaintReport): string {
     paras.push(`<p ${pStyle}><b>四是共性问题以"${s.keywordStats[0].keyword}"等为主。</b>本期投诉内容高频问题关键词包括${kws}，建议督促相关经营主体对照整改。</p>`)
   }
 
-  // AI 归因结论（二期，mock 已模拟）
-  let aiBlock = ''
-  if (report.hasAiInsight && report.aiInsight) {
-    aiBlock = `<div style="color:#666;font-size:11px;margin:4px 0 6px">AI 归因结论（二期）</div><div style="background:#f6ffed;border:1px solid #b7eb8f;padding:10px;border-radius:4px;line-height:1.8">${report.aiInsight}</div>`
-  } else {
-    aiBlock = `<div style="color:#666;font-size:11px;margin:4px 0 6px">AI 归因结论</div><div style="color:#999;padding:6px">AI 文本归因二期上线后自动生成（可人工编辑后定稿）</div>`
-  }
-
-  return `${paras.join('')}${riskTable}
-    ${aiBlock}
-    <div style="color:#999;font-size:10px;margin-top:6px">⚠ AI 归因为模拟内容，二期上线后由模型实时生成</div>`
+  return paras.join('') + riskTable
 }
 
 function buildOverviewText(report: ComplaintReport): string {
@@ -473,7 +468,7 @@ function buildOverviewText(report: ComplaintReport): string {
   const methodText = topSource ? `从投诉来源看，${topSource.label}占比最高（${((topSource.count / s.total) * 100).toFixed(2)}%）；` : ''
   const regionText = topRegion ? `从行政区域看，${topRegion.name}投诉量居前（${topRegion.count}件）；` : ''
   const categoryText = topCategory ? `从被投诉对象看，${topCategory.label}类投诉最为集中（${topCategory.count}件，占${((topCategory.count / s.total) * 100).toFixed(2)}%）。` : ''
-  return `${period}，${scope}共受理旅游投诉 ${s.total} 件，其中待办 ${s.pending} 件、已办结 ${s.closedCount} 件。${methodText}${regionText}${categoryText}${momText}`
+  return `${period}，${scope}共受理旅游投诉 ${s.total} 件，其中未办结 ${s.pending} 件、已办结 ${s.closedCount} 件。${methodText}${regionText}${categoryText}${momText}`
 }
 
 function buildAdviceText(report: ComplaintReport): string {

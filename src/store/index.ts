@@ -702,7 +702,7 @@ export const useStore = create<AppState>()(
       name: 'yqrq-store',
       // 数据版本：当 mock 数据结构发生变化时递增
       // 版本不匹配时，对应模块数据会被重置为最新 mock 数据
-      version: 15,
+      version: 18,
       migrate: (persistedState: any, version) => {
         // 版本 < 2：补贴管理 mock 数据结构调整（团队接待奖励由9行合并为3行）
         if (version < 2) {
@@ -844,6 +844,33 @@ export const useStore = create<AppState>()(
             ...persistedState,
             complaints: deepClone(MockComplaints),
             trainingMaterials: deepClone(MockTrainingMaterials),
+          }
+        }
+        // 版本 < 16：补贴申报新增"行程信息"（按日记录景区/酒店，拉取自团信息），重置补贴申报数据
+        if (version < 16) {
+          persistedState = {
+            ...persistedState,
+            subsidyApplications: deepClone(MockSubsidyApplications),
+            subsidyOperationLogs: deepClone(MockSubsidyOperationLogs),
+          }
+        }
+        // 版本 < 17：投诉报表模板固化（去章节配置）、"核心指标"更名"投诉总量"、转办交叉表改按九市州统计，
+        // 问题分析章保留（仅去 AI 归因占位文字），重置报表/模板/归档日志
+        if (version < 17) {
+          persistedState = {
+            ...persistedState,
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+            complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
+          }
+        }
+        // 版本 < 18：问题分析章恢复为默认章节（此前版本曾误移除），重置报表数据
+        if (version < 18) {
+          persistedState = {
+            ...persistedState,
+            complaintReports: deepClone(MockComplaintReports),
+            complaintReportTemplates: deepClone(MockComplaintReportTemplates),
+            complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
           }
         }
         return persistedState

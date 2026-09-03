@@ -543,7 +543,7 @@ export default function ComplaintDashboard() {
           <Col span={8}>
             <Card style={{ height: '100%' }}>
               <Statistic
-                title="待办投诉数"
+                title="未办结数"
                 value={coreMetrics.pending}
                 suffix="件"
                 prefix={<ClockCircleOutlined />}

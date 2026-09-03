@@ -128,6 +128,17 @@ export default function SubsidyDetail() {
     { title: '手机号', dataIndex: 'phone', width: 130, render: (v?: string) => (v ? maskPhone(v) : '-') },
   ]
 
+  // 行程信息列（只读）：按日展示景区与酒店安排（多行文本）
+  const itineraryColumns = [
+    { title: '序号', key: 'idx', width: 60, render: (_: unknown, __: any, i: number) => i + 1, align: 'center' as const },
+    { title: '日期', dataIndex: 'date', width: 150 },
+    {
+      title: '行程安排（景区、酒店）',
+      dataIndex: 'content',
+      render: (v: string) => <div style={{ whiteSpace: 'pre-line' }}>{v || '-'}</div>,
+    },
+  ]
+
   return (
     <>
       <PageHeader
@@ -152,7 +163,7 @@ export default function SubsidyDetail() {
             )}
             {isApplicant && (
               <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>
-                导出附件
+                下载申报表
               </Button>
             )}
           </Space>
@@ -340,6 +351,23 @@ export default function SubsidyDetail() {
                   </Card>
                 ),
               },
+              // 行程信息（按日记录景区与酒店，只读展示）
+              {
+                key: 'itinerary',
+                label: '行程信息',
+                children: (
+                  <Card bordered={false}>
+                    <Table
+                      rowKey="key"
+                      dataSource={app.itineraryRows || []}
+                      columns={itineraryColumns}
+                      pagination={false}
+                      size="small"
+                      locale={{ emptyText: '暂无行程信息' }}
+                    />
+                  </Card>
+                ),
+              },
               ...(showMajor('team_reception')
                 ? [
                     {
@@ -484,7 +512,7 @@ export default function SubsidyDetail() {
                   )}
                   {isApplicant && (
                     <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>
-                      导出附件
+                      下载申报表
                     </Button>
                   )}
                 </Space>

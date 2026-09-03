@@ -85,8 +85,13 @@ export default function AnnouncementManageList() {
   const handlePublish = (a: Announcement) => {
     const error = checkPublishable(a)
     if (error) {
-      message.warning(`${error}（将跳转编辑页）`)
-      navigate(`/announcements/edit/${a.id}`)
+      // 仅草稿可进入编辑页补全；已下架公告不可编辑，提示后可删除或新建公告
+      if (a.status === 'draft') {
+        message.warning(`${error}（将跳转编辑页）`)
+        navigate(`/announcements/edit/${a.id}`)
+      } else {
+        message.warning(`${error}；已下架公告不可编辑，如需变更内容请新建公告`)
+      }
       return
     }
     updateAnnouncement(a.id, {
@@ -283,14 +288,8 @@ export default function AnnouncementManageList() {
               )}
             </>
           )}
-          {/* 已发布公告不可编辑：只能下架后编辑，再重新发布 */}
-          {a.status === 'published' ? (
-            <Tooltip title="已发布公告不可编辑，请先下架，编辑后重新发布">
-              <Button type="link" size="small" icon={<EditOutlined />} disabled>
-                编辑
-              </Button>
-            </Tooltip>
-          ) : (
+          {/* 内容修改规则：仅草稿可编辑；已发布上架后仅可下架，下架后同样不可编辑——如需变更内容，新建公告重新发布 */}
+          {a.status === 'draft' ? (
             <Button
               type="link"
               size="small"
@@ -299,6 +298,18 @@ export default function AnnouncementManageList() {
             >
               编辑
             </Button>
+          ) : (
+            <Tooltip
+              title={
+                a.status === 'published'
+                  ? '已发布公告不可编辑；如需修改内容，请先下架，再新建公告重新发布'
+                  : '已下架公告不可编辑；如需修改内容，请新建公告重新发布'
+              }
+            >
+              <Button type="link" size="small" icon={<EditOutlined />} disabled>
+                编辑
+              </Button>
+            </Tooltip>
           )}
           {(a.status === 'draft' || a.status === 'offline') && (
             <Button type="link" size="small" danger onClick={() => handleDelete(a)}>

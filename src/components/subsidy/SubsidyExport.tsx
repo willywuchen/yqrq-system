@@ -2,6 +2,7 @@ import { Modal, Radio, App, Space, Typography, Alert } from 'antd'
 import { ExportOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useStore } from '../../store'
+import { buildItineraryRowsFromTeamPreset } from '../../mock/data'
 import { nowStr, maskIdNumber, maskPhone } from '../../utils'
 
 const { Text } = Typography
@@ -46,18 +47,14 @@ export default function SubsidyExport({ open, onClose, applicationId }: Props) {
       )
       .join('')
 
-    // 行程信息（按住宿天 + 景区）
-    const itineraryRows = s.accommodations
-      .map((a, i) => {
-        const scenic = s.scenics.find((sc) => sc.enterTime?.startsWith(a.checkInDate))
-        return `<tr>
-          <td style="text-align:center">${i + 1}</td>
-          <td style="text-align:center">${a.checkInDate}</td>
-          <td>${scenic ? scenic.name : '-'}</td>
-          <td>${a.hotelName}</td>
-          <td style="text-align:center">${a.checkOutDate}</td>
-        </tr>`
-      })
+    // 行程信息（按天）：优先使用申报中可编辑的行程信息；缺失时按团信息快照自动生成
+    const itineraryData = app.itineraryRows?.length ? app.itineraryRows : buildItineraryRowsFromTeamPreset(s)
+    const itineraryRows = itineraryData
+      .map((r, i) => `<tr>
+        <td style="text-align:center">${i + 1}</td>
+        <td style="text-align:center">${r.date}</td>
+        <td style="white-space:pre-line">${r.content || '-'}</td>
+      </tr>`)
       .join('')
 
     return `<!DOCTYPE html>
@@ -99,10 +96,10 @@ export default function SubsidyExport({ open, onClose, applicationId }: Props) {
   <h2>二、行程信息（按天）</h2>
   <table>
     <thead>
-      <tr><th style="width:8%">序号</th><th style="width:18%">日期</th><th style="width:32%">主要景区/站点</th><th style="width:24%">住宿酒店</th><th style="width:18%">退房日期</th></tr>
+      <tr><th style="width:8%">序号</th><th style="width:20%">日期</th><th style="width:72%">行程安排（景区、酒店）</th></tr>
     </thead>
     <tbody>
-      ${itineraryRows || '<tr><td colspan="5" style="text-align:center;color:#999">无行程信息</td></tr>'}
+      ${itineraryRows || '<tr><td colspan="3" style="text-align:center;color:#999">无行程信息</td></tr>'}
     </tbody>
   </table>
 
@@ -409,7 +406,7 @@ export default function SubsidyExport({ open, onClose, applicationId }: Props) {
       open={open}
       onCancel={onClose}
       onOk={handleExport}
-      okText="生成附件"
+      okText="下载打印"
       cancelText="取消"
       width={520}
     >
@@ -418,7 +415,7 @@ export default function SubsidyExport({ open, onClose, applicationId }: Props) {
         showIcon
         icon={<InfoCircleOutlined />}
         message="导出说明"
-        description="点击「生成附件」会在新窗口打开格式化后的附件页面，您可以使用浏览器的「打印」功能（Ctrl/Cmd + P）选择「另存为 PDF」保存为 PDF 文件，或直接打印。"
+        description="点击「下载打印」会在新窗口打开格式化后的附件页面，您可以使用浏览器的「打印」功能（Ctrl/Cmd + P）选择「另存为 PDF」保存为 PDF 文件，或直接打印。"
         style={{ marginBottom: 16 }}
       />
 

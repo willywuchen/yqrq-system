@@ -24,7 +24,6 @@ import {
   OpinionHandleStatusLabels,
   OpinionHandleStatusColors,
   TourismCategoryLabels,
-  GUIZHOU_CITIES,
   type PublicOpinion,
   type OpinionHandleStatus,
   type OpinionHandleLog,
@@ -286,13 +285,12 @@ export default function OpinionForm({ mode }: Props) {
                 <Form.Item
                   name="authorLocation"
                   label="作者定位地"
-                  rules={[{ required: true, message: '请选择作者定位地' }]}
+                  rules={[
+                    { required: true, message: '请输入作者定位地' },
+                    { max: 50, message: '作者定位地不能超过50字符' },
+                  ]}
                 >
-                  <Select
-                    placeholder="请选择"
-                    showSearch
-                    options={GUIZHOU_CITIES.map((c) => ({ value: c, label: c }))}
-                  />
+                  <Input placeholder="请输入作者定位地（如：贵阳市）" maxLength={50} />
                 </Form.Item>
               </Col>
               <Col span={12}>

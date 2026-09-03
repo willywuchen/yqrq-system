@@ -40,7 +40,9 @@ import {
   SubsidyStatusLabels,
   type SubsidyApplication,
   type TouristItem,
+  type ItineraryRow,
 } from '../../types'
+import { buildItineraryRowsFromTeamPreset } from '../../mock/data'
 import { formatMoney, maskIdNumber, maskPhone, nowStr } from '../../utils'
 
 const { Text } = Typography
@@ -223,6 +225,30 @@ export default function SubsidyForm() {
       const next = prev.filter((r) => r.key !== rowKey).map((r, i) => ({ ...r, nightNo: `第${i + 1}晚` }))
       updateTeamBaseInfo('hotelFirst5Nights', next.map((r) => r.hotelName))
       return next
+    })
+  }
+
+  // 行程信息行编辑（来源：团信息自动拉取，按日记录景区与酒店，统一写在一个输入框）
+  const updateItineraryRow = (rowKey: string, field: 'date' | 'content', value: string) => {
+    setFormValues((prev) => {
+      if (!prev) return prev
+      const rows = (prev.itineraryRows || []).map((r) => (r.key === rowKey ? { ...r, [field]: value } : r))
+      return { ...prev, itineraryRows: rows }
+    })
+  }
+
+  const addItineraryRow = () => {
+    setFormValues((prev) => {
+      if (!prev) return prev
+      const rows = [...(prev.itineraryRows || []), { key: `it-new-${Date.now()}`, date: '', content: '' }]
+      return { ...prev, itineraryRows: rows }
+    })
+  }
+
+  const removeItineraryRow = (rowKey: string) => {
+    setFormValues((prev) => {
+      if (!prev) return prev
+      return { ...prev, itineraryRows: (prev.itineraryRows || []).filter((r) => r.key !== rowKey) }
     })
   }
 
@@ -466,7 +492,7 @@ export default function SubsidyForm() {
     modal.confirm({
       title: '重新拉取团信息',
       icon: <ReloadOutlined />,
-      content: '重新拉取将覆盖当前已编辑内容（包括团队基本信息、住宿、车号、景区等），是否继续？',
+      content: '重新拉取将覆盖当前已编辑内容（包括团队基本信息、行程信息、住宿、车号、景区等），是否继续？',
       okText: '确认覆盖',
       okType: 'danger',
       cancelText: '取消',
@@ -494,6 +520,7 @@ export default function SubsidyForm() {
                   scenicNames4APlus: newScenics4A.map((s) => s.name),
                   scenicCount4APlus: newScenics4A.length,
                 },
+                itineraryRows: buildItineraryRowsFromTeamPreset(snapshot),
               }
             : prev,
         )
@@ -657,6 +684,49 @@ export default function SubsidyForm() {
       render: (_: unknown, r: HotelRow) =>
         canEdit ? (
           <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeHotelRow(r.key)}>
+            删除
+          </Button>
+        ) : null,
+    },
+  ]
+
+  // 行程信息列：日期 + 行程安排（景区与酒店统一在一个输入框内编辑）
+  const itineraryColumns = [
+    { title: '序号', key: 'idx', width: 60, align: 'center' as const, render: (_: unknown, __: ItineraryRow, i: number) => i + 1 },
+    {
+      title: '日期',
+      dataIndex: 'date',
+      width: 180,
+      render: (_: unknown, r: ItineraryRow) => (
+        <DatePicker
+          value={r.date ? dayjs(r.date) : null}
+          disabled={!canEdit}
+          style={{ width: '100%' }}
+          placeholder="选择日期"
+          onChange={(_, s) => updateItineraryRow(r.key, 'date', s as string)}
+        />
+      ),
+    },
+    {
+      title: '行程安排（景区、酒店）',
+      dataIndex: 'content',
+      render: (_: unknown, r: ItineraryRow) => (
+        <Input.TextArea
+          value={r.content}
+          disabled={!canEdit}
+          autoSize={{ minRows: 2, maxRows: 8 }}
+          placeholder="如：【景区】第1站 黄果树瀑布景区 08:00~11:00；【住宿】第2站 贵阳凯宾斯基酒店 21:00~次日07:00"
+          onChange={(e) => updateItineraryRow(r.key, 'content', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'op',
+      width: 80,
+      render: (_: unknown, r: ItineraryRow) =>
+        canEdit ? (
+          <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeItineraryRow(r.key)}>
             删除
           </Button>
         ) : null,
@@ -1289,6 +1359,43 @@ export default function SubsidyForm() {
                         </Col>
                       </Row>
                     </Form>
+                  </Card>
+                ),
+              },
+              // 行程信息（按日记录景区与酒店，来源：团信息自动拉取，可编辑）
+              {
+                key: 'itinerary',
+                label: (
+                  <Space>
+                    <span>行程信息</span>
+                    <Tag color="blue" style={{ margin: 0 }}>
+                      {(formValues.itineraryRows || []).length}天
+                    </Tag>
+                  </Space>
+                ),
+                children: (
+                  <Card bordered={false}>
+                    <Alert
+                      type="info"
+                      showIcon
+                      message="行程信息按日期记录当日景区与酒店安排，已从团信息自动拉取。可直接修改文字内容（景区、酒店统一填写在一个输入框内），也可添加或删除日期行。"
+                      style={{ marginBottom: 16 }}
+                    />
+                    <div style={{ marginBottom: 8 }}>
+                      {canEdit && (
+                        <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addItineraryRow}>
+                          添加一天
+                        </Button>
+                      )}
+                    </div>
+                    <Table
+                      rowKey="key"
+                      dataSource={formValues.itineraryRows || []}
+                      columns={itineraryColumns}
+                      pagination={false}
+                      size="small"
+                      locale={{ emptyText: '暂无行程信息' }}
+                    />
                   </Card>
                 ),
               },

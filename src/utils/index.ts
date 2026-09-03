@@ -278,6 +278,7 @@ export function buildComplaintReportSnapshot(
       suspectedIssue: c.suspectedIssue || '涉嫌违法违规（未注明具体问题）',
       statusLabel: ComplaintStatusLabels[c.status] || c.status,
       region: c.district || c.city || '未知',
+      city: c.city || '未知',
       department: inferTransferDept(c),
       theme: inferTransferTheme(c),
     }))

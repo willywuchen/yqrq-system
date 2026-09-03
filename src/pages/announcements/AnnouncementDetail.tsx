@@ -8,6 +8,7 @@ import {
   Result,
   Space,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import {
@@ -172,14 +173,27 @@ export default function AnnouncementDetail() {
           { title: '公告详情' },
         ]}
         extra={
-          isManager && (
+          isManager &&
+          (announcement.status === 'draft' ? (
             <Button
               icon={<EditOutlined />}
               onClick={() => navigate(`/announcements/edit/${announcement.id}`)}
             >
               编辑公告
             </Button>
-          )
+          ) : (
+            <Tooltip
+              title={
+                announcement.status === 'published'
+                  ? '已发布公告不可编辑；如需修改内容，请先下架，再新建公告重新发布'
+                  : '已下架公告不可编辑；如需修改内容，请新建公告重新发布'
+              }
+            >
+              <Button icon={<EditOutlined />} disabled>
+                编辑公告
+              </Button>
+            </Tooltip>
+          ))
         }
       />
       <PageContainer>
@@ -196,7 +210,7 @@ export default function AnnouncementDetail() {
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
-            message="该公告已下架，接收方无法查看；可在公告管理列表重新发布（已读统计保留）"
+            message="该公告已下架，接收方无法查看；可在公告管理列表重新发布或删除（已读统计保留）；公告内容不可修改，如需变更请新建公告重新发布"
           />
         )}
 

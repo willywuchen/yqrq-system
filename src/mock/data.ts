@@ -1,4 +1,4 @@
-import type { Application, Complaint, Message, RewardCategory, TouristItem, ScenicInfo, AccommodationInfo, GuideDriverInfo, Attachment, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleLog, ComplaintSource, TourismCategory, ComplaintStatus } from '../types';
+import type { Application, Complaint, Message, RewardCategory, TouristItem, ScenicInfo, AccommodationInfo, GuideDriverInfo, Attachment, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleLog, ComplaintSource, TourismCategory, ComplaintStatus, ItineraryRow } from '../types';
 import { POLICY_CONSTANTS } from '../types';
 import type { ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog } from '../types';
 import { getDefaultReportTemplates, DEFAULT_REPORT_CHAPTERS } from '../types';
@@ -2034,6 +2034,48 @@ export function emptyCulturePromotionRows() {
   ];
 }
 
+// 行程信息（按日）：从团信息的景区/住宿数据自动生成
+// 景区按进入时间归属日期（游览时长按3小时模拟），酒店按入住日期归属，住宿时间固定 21:00~次日07:00；
+// 每日站点序号从1连续编号，景区与酒店统一写入一个文本框，申报时用户可手动编辑
+export function buildItineraryRowsFromTeamPreset(
+  preset: Pick<TeamPreset, 'travelStart' | 'travelEnd' | 'scenics' | 'accommodations'>,
+): ItineraryRow[] {
+  const rows: ItineraryRow[] = []
+  if (!preset.travelStart || !preset.travelEnd) return rows
+  const start = new Date(`${preset.travelStart}T00:00:00`)
+  const end = new Date(`${preset.travelEnd}T00:00:00`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return rows
+
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  const fmtDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  const addHours = (hhmm: string, hours: number) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    const total = h * 60 + m + hours * 60
+    return `${pad(Math.floor(total / 60) % 24)}:${pad(total % 60)}`
+  }
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = fmtDate(d)
+    const lines: string[] = []
+    let station = 0
+    preset.scenics
+      .filter((s) => (s.enterTime || '').startsWith(dateStr))
+      .forEach((s) => {
+        station += 1
+        const time = (s.enterTime || '').split(' ')[1]
+        lines.push(`【景区】第${station}站 ${s.name}${time ? ` ${time}~${addHours(time, 3)}` : ''}`)
+      })
+    preset.accommodations
+      .filter((a) => a.checkInDate === dateStr)
+      .forEach((a) => {
+        station += 1
+        lines.push(`【住宿】第${station}站 ${a.hotelName} 21:00~次日07:00`)
+      })
+    rows.push({ key: `it-${dateStr}`, date: dateStr, content: lines.join('\n') })
+  }
+  return rows
+}
+
 // 从团预设生成补贴申报记录（拉取时的字段映射）
 export function buildSubsidyFromTeamPreset(teamPreset: TeamPreset, options: {
   id: string;
@@ -2129,6 +2171,7 @@ export function buildSubsidyFromTeamPreset(teamPreset: TeamPreset, options: {
       scenicCount4APlus: scenics4APlus.length,
       scenicNames4APlus: scenics4APlus.map((s) => s.name),
     },
+    itineraryRows: buildItineraryRowsFromTeamPreset(teamPreset),
     culturePromotionRows: emptyCulturePromotionRows(),
     declaration: {
       contactPhone: '0851-85888888',
@@ -2256,14 +2299,13 @@ export const MockSubsidyOperationLogs: SubsidyOperationLog[] = [
 export const MockComplaintReportTemplates: ComplaintReportTemplate[] = getDefaultReportTemplates();
 
 // V1.4：种子报表为三种典型周期示例（整月/跨周/单日），不再区分报表类型
+// V1.8：去掉 AI 文本归因（风险研判段）内容，种子报表不再携带 aiInsight
 export const MockComplaintReports: ComplaintReport[] = [
   (() => {
     const periodStart = '2026-07-01';
     const periodEnd = '2026-07-31';
     const scopeName = '全省';
     const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
-    const aiInsight = `<p style="margin:0 0 8px">综合本期数据，全省投诉主要集中在旅行社违约违规与景区管理服务两大领域，暑期（7月）投诉量较前期明显上升，与旅游旺季游客规模增长相符。</p>
-<p style="margin:0">建议对重复投诉商家开展集中约谈，督促重点景区在高峰期加强排队秩序与停车管理，并对本期移送的问题线索处置进展跟踪督办。</p>`;
     return {
       id: 'RPT-20260801-0001',
       title: buildReportTitle(periodStart, periodEnd, scopeName),
@@ -2274,8 +2316,7 @@ export const MockComplaintReports: ComplaintReport[] = [
       generatedBy: '陈华',
       generatedAt: '2026-08-01 10:05:00',
       summary: buildReportSummary(snapshot, scopeName),
-      hasAiInsight: true,
-      aiInsight,
+      hasAiInsight: false,
       status: snapshot.total === 0 ? 'empty' : 'normal',
       chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)),
       snapshot,
@@ -2287,8 +2328,6 @@ export const MockComplaintReports: ComplaintReport[] = [
     const periodEnd = '2026-08-23';
     const scopeName = '贵阳市';
     const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
-    const topMerchant = snapshot.respondentClusters[0];
-    const aiInsight = `<p style="margin:0">本期贵阳市投诉${snapshot.total}件，${topMerchant ? `"${topMerchant.name}"被投诉${topMerchant.count}次，存在违规惯性，` : ''}环比${snapshot.momRate >= 0 ? '上升' : '下降'}${Math.abs(snapshot.momRate).toFixed(1)}%。建议对重点商家启动约谈并限期整改，跟踪移送线索处置进展。</p>`;
     return {
       id: 'RPT-20260824-0002',
       title: buildReportTitle(periodStart, periodEnd, scopeName),
@@ -2299,8 +2338,7 @@ export const MockComplaintReports: ComplaintReport[] = [
       generatedBy: '李明',
       generatedAt: '2026-08-24 09:30:00',
       summary: buildReportSummary(snapshot, scopeName),
-      hasAiInsight: true,
-      aiInsight,
+      hasAiInsight: false,
       status: snapshot.total === 0 ? 'empty' : 'normal',
       chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)),
       snapshot,
@@ -2312,7 +2350,6 @@ export const MockComplaintReports: ComplaintReport[] = [
     const periodEnd = '2026-08-25';
     const scopeName = '全省';
     const snapshot = buildComplaintReportSnapshot(MockComplaints, periodStart, periodEnd, scopeName);
-    const aiInsight = `<p style="margin:0">当日受理${snapshot.total}件，${snapshot.pending > 0 ? `${snapshot.pending}件待办需24小时内响应。` : '处置进度正常。'}建议次日跟踪重点商家整改落实情况。</p>`;
     return {
       id: 'RPT-20260826-0003',
       title: buildReportTitle(periodStart, periodEnd, scopeName),
@@ -2323,8 +2360,7 @@ export const MockComplaintReports: ComplaintReport[] = [
       generatedBy: '管理员',
       generatedAt: '2026-08-26 18:00:00',
       summary: buildReportSummary(snapshot, scopeName),
-      hasAiInsight: true,
-      aiInsight,
+      hasAiInsight: false,
       status: snapshot.total === 0 ? 'empty' : 'normal',
       chapters: JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS)),
       snapshot,
@@ -2334,9 +2370,9 @@ export const MockComplaintReports: ComplaintReport[] = [
 ];
 
 export const MockComplaintReportArchiveLogs: ComplaintReportArchiveLog[] = [
-  { archiveLogId: 'cral-1', reportId: 'RPT-20260801-0001', action: 'generate', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-01 10:05:00', detail: '手动生成报表（统计周期：2026年7月）' },
+  { archiveLogId: 'cral-1', reportId: 'RPT-20260801-0001', action: 'generate', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-01 10:05:00', detail: '新增报表（统计周期：2026年7月）' },
   { archiveLogId: 'cral-2', reportId: 'RPT-20260801-0001', action: 'preview', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-01 10:30:00', detail: '在线预览' },
   { archiveLogId: 'cral-3', reportId: 'RPT-20260801-0001', action: 'export', operator: '陈华', operatorLevel: 'province', operatedAt: '2026-08-01 11:20:00', detail: '导出 Word' },
-  { archiveLogId: 'cral-4', reportId: 'RPT-20260824-0002', action: 'generate', operator: '李明', operatorLevel: 'city', operatedAt: '2026-08-24 09:30:00', detail: '手动生成报表（统计周期：8月17日至23日）' },
-  { archiveLogId: 'cral-5', reportId: 'RPT-20260826-0003', action: 'generate', operator: '管理员', operatorLevel: 'province', operatedAt: '2026-08-26 18:00:00', detail: '手动生成报表（统计周期：8月25日）' },
+  { archiveLogId: 'cral-4', reportId: 'RPT-20260824-0002', action: 'generate', operator: '李明', operatorLevel: 'city', operatedAt: '2026-08-24 09:30:00', detail: '新增报表（统计周期：8月17日至23日）' },
+  { archiveLogId: 'cral-5', reportId: 'RPT-20260826-0003', action: 'generate', operator: '管理员', operatorLevel: 'province', operatedAt: '2026-08-26 18:00:00', detail: '新增报表（统计周期：8月25日）' },
 ];

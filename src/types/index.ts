@@ -386,13 +386,15 @@ export type ComplaintSource =
   | 'hotline_12345'
   | 'national_platform'
   | 'province_phone'
-  | 'letter_visit';
+  | 'letter_visit'
+  | 'other';
 
 export const ComplaintSourceLabels: Record<ComplaintSource, string> = {
   hotline_12345: '12345热线',
   national_platform: '全国文化市场技术监督与服务平台',
   province_phone: '省级电话投诉',
   letter_visit: '来信来访',
+  other: '其他',
 };
 
 export type TourismCategory =
@@ -646,6 +648,8 @@ export interface ComplaintReportSnapshot {
     statusLabel: string
     /** 所属区域（县级优先，无则取市州） */
     region: string
+    /** 所属市州（投诉转办情况交叉表横排列，固定为贵州九市州） */
+    city: string
     /** 移送或涉及部门 */
     department: string
     /** 线索主题 */
@@ -697,12 +701,11 @@ export interface ComplaintReportArchiveLog {
 }
 
 // V1.4 统一报表默认章节（公文结构：参照《贵州省旅游投诉受处工作情况》+《发现问题及移送线索统计分析》）
-// 所有报表同一套结构，章节可由管理员在"报表章节配置"中启停/排序/重命名
-// V1.5：默认章节去掉"办理质量""移送问题线索情况"（章节类型保留，可在章节配置中手动启用）
-// V1.6：新增"投诉转办情况"章（参照附件报告"四、移送问题线索情况"，按移送部门/线索主题交叉统计）
+// V1.8：报表模板固化为该套章节，不再提供"章节配置"功能；"核心指标"更名"投诉总量"；
+// 问题分析章保留（环比/高发组合/重复投诉风险分级/共性问题），仅不再展示"AI 归因结论"占位文字
 export const DEFAULT_REPORT_CHAPTERS: ComplaintReportChapter[] = [
   { kind: 'overview', title: '一、总体情况', enabled: true },
-  { kind: 'core_metrics', title: '二、核心指标', enabled: true },
+  { kind: 'core_metrics', title: '二、投诉总量', enabled: true },
   { kind: 'method_pie', title: '三、从投诉来源划分', enabled: true },
   { kind: 'region_bar', title: '四、从行政区域划分', enabled: true },
   { kind: 'category_bar', title: '五、从被投诉对象划分', enabled: true },
@@ -964,6 +967,13 @@ export interface SubsidyDeclaration {
   sealUrl?: string; // 盖章图片URL（前端预览用）
 }
 
+// 行程信息行（按日记录）：日期 + 行程安排（景区与酒店统一填写在一个输入框内）
+export interface ItineraryRow {
+  key: string;
+  date: string; // 日期（YYYY-MM-DD）
+  content: string; // 行程安排，支持多行，如：【景区】第1站 黄果树瀑布景区 08:00~11:00\n【住宿】第2站 贵阳凯宾斯基酒店 21:00~次日07:00
+}
+
 // 补贴申报记录（简化版，无审核流程）
 export interface SubsidyApplication {
   id: string;
@@ -1021,6 +1031,9 @@ export interface SubsidyApplication {
     scenicCount4APlus?: number; // 4A级以上景区数量
     scenicNames4APlus?: string[]; // 4A级以上景区名称
   };
+
+  // 行程信息（按日）：拉取自团信息（景区/住宿自动按日聚合），填报页可编辑
+  itineraryRows: ItineraryRow[];
 
   // 区块E：旅游宣传奖励申报
   culturePromotionRows: CulturePromotionRow[];

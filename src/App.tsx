@@ -21,7 +21,6 @@ import ComplaintDetail from './pages/complaints/ComplaintDetail'
 import ComplaintDashboard from './pages/complaints/ComplaintDashboard'
 import ComplaintReportList from './pages/complaints/ComplaintReportList'
 import ComplaintReportPreview from './pages/complaints/ComplaintReportPreview'
-import ComplaintReportTemplateConfig from './pages/complaints/ComplaintReportTemplateConfig'
 import OpinionList from './pages/opinions/OpinionList'
 import OpinionForm from './pages/opinions/OpinionForm'
 import OpinionDetail from './pages/opinions/OpinionDetail'
@@ -99,7 +98,6 @@ export default function App() {
           <Route path="complaints/new" element={<ComplaintForm mode="new" />} />
           <Route path="complaints/dashboard" element={<ComplaintDashboard />} />
       <Route path="complaints/reports" element={<ComplaintReportList />} />
-      <Route path="complaints/reports/template-config" element={<ComplaintReportTemplateConfig />} />
       <Route path="complaints/reports/:id" element={<ComplaintReportPreview />} />
       <Route path="complaints/:id" element={<ComplaintDetail />} />
           <Route path="complaints/:id/edit" element={<ComplaintForm mode="edit" />} />

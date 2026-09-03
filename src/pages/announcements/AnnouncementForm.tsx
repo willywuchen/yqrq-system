@@ -154,13 +154,17 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
 
   const editingStatus = editing?.status
 
-  // 已发布公告不允许编辑：只能下架后编辑，再重新发布
-  if (mode === 'edit' && editingStatus === 'published') {
+  // 已发布/已下架公告内容不可修改（PRD §3.5）：发布上架后仅可下架；如需变更内容，下架后通过「新建公告」重新发布
+  if (mode === 'edit' && (editingStatus === 'published' || editingStatus === 'offline')) {
     return (
       <Result
         status="info"
-        title="该公告已发布，不可编辑"
-        subTitle="如需修改内容，请先在公告管理列表将其下架，下架后编辑并重新发布"
+        title={editingStatus === 'published' ? '该公告已发布，不可编辑' : '该公告已下架，不可编辑'}
+        subTitle={
+          editingStatus === 'published'
+            ? '已上架公告仅可下架；如需修改内容，请先下架，再通过「新建公告」重新发布'
+            : '已下架公告不可编辑；如需修改内容，请通过「新建公告」重新发布'
+        }
         extra={
           <Button type="primary" onClick={() => navigate('/announcements')}>
             返回公告管理
@@ -242,21 +246,19 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
     return false
   }
 
-  // ===== 保存（状态流转符合 PRD §3.5 状态机）=====
+  // ===== 保存（状态流转符合 PRD §3.5 状态机；仅草稿可进入本页编辑，发布后内容不可修改）=====
   const handleSave = async (target: 'save' | 'publish') => {
     const willPublish = target === 'publish'
-    const keepStatus = editing ? editing.status : 'draft'
-    const nextStatus = willPublish ? 'published' : keepStatus
-    // 发布或保持已发布态时全量校验；草稿保存仅校验标题（PRD §5.2）
-    const strict = willPublish || nextStatus === 'published'
+    const nextStatus = willPublish ? 'published' : 'draft'
+    // 发布时全量校验；草稿保存仅校验标题（PRD §5.2）
     try {
-      if (strict) await form.validateFields()
+      if (willPublish) await form.validateFields()
       else await form.validateFields(['title'])
     } catch {
       return
     }
     const values = form.getFieldsValue()
-    if (strict) {
+    if (willPublish) {
       if (!richTextToPlain(richText).trim()) {
         message.warning('请录入公告正文')
         return
@@ -302,18 +304,13 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
       updateAnnouncement(editing.id, {
         ...payload,
         status: nextStatus,
-        // 编辑已发布公告即时生效，已读记录保留不清零（PRD §8 结论 3/8）
-        publishTime: willPublish ? now : editing.publishTime,
+        publishTime: willPublish ? now : undefined,
         updateBy: currentUser.name,
         updateTime: now,
       })
     }
     message.success(
-      willPublish
-        ? '已发布，目标账号即时可见'
-        : nextStatus === 'offline'
-          ? '已保存，公告仍为已下架状态'
-          : '已保存为草稿，可在管理列表继续编辑',
+      willPublish ? '已发布，目标账号即时可见' : '已保存为草稿，可在管理列表继续编辑',
     )
     navigate('/announcements')
   }
@@ -332,7 +329,7 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
     }
   }
 
-  const saveButtonLabel = editingStatus === 'offline' ? '保 存' : '保存为草稿'
+  const saveButtonLabel = '保存为草稿'
 
   return (
     <>
@@ -346,15 +343,6 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
         ]}
       />
       <PageContainer>
-        {editingStatus === 'offline' && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="该公告已下架，保存后仍为下架状态；点击「重新发布」可恢复对接收方可见（已读统计延续）"
-          />
-        )}
-
         <Card>
           <Form
             form={form}
@@ -549,11 +537,9 @@ export default function AnnouncementForm({ mode }: { mode: 'new' | 'edit' }) {
             <Space>
               <Button onClick={handleCancel}>取 消</Button>
               <Button onClick={() => handleSave('save')}>{saveButtonLabel}</Button>
-              {editingStatus !== 'published' && (
-                <Button type="primary" onClick={() => handleSave('publish')}>
-                  {editingStatus === 'offline' ? '重新发布' : '发 布'}
-                </Button>
-              )}
+              <Button type="primary" onClick={() => handleSave('publish')}>
+                发 布
+              </Button>
             </Space>
           </Form>
         </Card>

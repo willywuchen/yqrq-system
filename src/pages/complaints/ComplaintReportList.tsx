@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Alert,
   Card,
   Table,
   Tag,
@@ -15,15 +16,12 @@ import {
   Typography,
   Popconfirm,
   Empty,
-  Radio,
-  Tooltip,
 } from 'antd'
 import {
   PlusOutlined,
   EyeOutlined,
   DownloadOutlined,
   DeleteOutlined,
-  SettingOutlined,
   FileExcelOutlined,
   FileWordOutlined,
   Html5Outlined,
@@ -45,20 +43,31 @@ const { Text } = Typography
 
 const { RangePicker } = DatePicker
 
+// 按当前账号层级自动确定报表范围（V1.8：不再手动选择数据层级）
+// 省级账号（文旅厅/系统管理员）→ 全省报表；市州级账号（市州复审员）→ 所属市州报表
+function resolveReportScope(currentUser: { role: string; org?: string }): {
+  scope: ComplaintReportScope
+  scopeName: string
+} {
+  if (currentUser.role === 'review_reviewer') {
+    const city = GUIZHOU_CITIES.find((c) => (currentUser.org || '').includes(c))
+    return { scope: 'city', scopeName: city || GUIZHOU_CITIES[0] }
+  }
+  return { scope: 'province', scopeName: '全省' }
+}
+
 export default function ComplaintReportList() {
   const navigate = useNavigate()
   const { message } = App.useApp()
   const {
     complaintReports,
     complaints,
-    complaintReportTemplates,
     currentUser,
     addComplaintReport,
     deleteComplaintReport,
     appendComplaintReportLog,
   } = useStore()
 
-  const isAdmin = currentUser.role === 'admin'
   const [form] = Form.useForm()
   const [genOpen, setGenOpen] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -75,35 +84,24 @@ export default function ComplaintReportList() {
     return true
   })
 
-  // 当前用户可生成的层级范围（V1.1：县级不可越权；当前角色简化为 final_reviewer=省级，admin=全部）
-  const allowedScopes: ComplaintReportScope[] = isAdmin ? ['province', 'city', 'district'] : ['province']
-
   const handleGenerate = async () => {
     try {
       const values = await form.validateFields()
-      const scope: ComplaintReportScope = values.scope
-      const scopeName = scope === 'province' ? '全省' : values.scopeName || '贵阳市'
+      const { scope, scopeName } = resolveReportScope(currentUser)
       const start = values.range[0] instanceof dayjs.Dayjs ? values.range[0] : dayjs(values.range[0])
       const end = values.range[1] instanceof dayjs.Dayjs ? values.range[1] : dayjs(values.range[1])
-      const genDate = values.generateDate instanceof dayjs.Dayjs ? values.generateDate : dayjs(values.generateDate)
       const periodStart = start.format('YYYY-MM-DD')
       const periodEnd = end.format('YYYY-MM-DD')
-      const generatedAt = genDate.format('YYYY-MM-DD HH:mm:ss')
-
-      // 权限校验（V1.1：县级不可越权）
-      if (!allowedScopes.includes(scope)) {
-        message.error(`您的层级不可生成${ComplaintReportScopeLabels[scope]}报表`)
-        return
-      }
+      // 报表生成日期即操作成功生成报表的时间，不再手动选择
+      const generatedAt = nowStr()
 
       setGenerating(true)
       // 模拟生成耗时
       await new Promise((res) => setTimeout(res, 600))
 
       const snapshot = buildComplaintReportSnapshot(complaints, periodStart, periodEnd, scopeName)
-      // 章节取通用模板配置（管理员可在"章节配置"中调整），兜底默认章节
-      const configured = complaintReportTemplates[0]?.chapters
-      const chapters = JSON.parse(JSON.stringify(configured && configured.length > 0 ? configured : DEFAULT_REPORT_CHAPTERS))
+      // 报表模板固化：统一使用默认章节（无章节配置功能）
+      const chapters = JSON.parse(JSON.stringify(DEFAULT_REPORT_CHAPTERS))
       const report: ComplaintReport = {
         id: genId('RPT'),
         title: buildReportTitle(periodStart, periodEnd, scopeName),
@@ -128,7 +126,7 @@ export default function ComplaintReportList() {
         operator: currentUser.name,
         operatorLevel: scope,
         operatedAt: nowStr(),
-        detail: '手动生成报表',
+        detail: '新增报表',
       })
       message.success('报表已生成')
       setGenOpen(false)
@@ -265,9 +263,6 @@ export default function ComplaintReportList() {
             {record.status === 'empty' && (
               <Tag color="default" style={{ marginRight: 0, flexShrink: 0 }}>空报表</Tag>
             )}
-            {record.hasAiInsight && (
-              <Tag color="green" style={{ marginRight: 0, flexShrink: 0 }}>含风险研判</Tag>
-            )}
             <Text
               type="secondary"
               style={{ fontSize: 12, flex: 1, minWidth: 0 }}
@@ -338,10 +333,7 @@ export default function ComplaintReportList() {
         breadcrumb={[{ title: '首页', path: '/' }, { title: '投诉台账', path: '/complaints' }, { title: '数据报表' }]}
         extra={
           <Space>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenOpen(true)}>手动生成报表</Button>
-            <Tooltip title="系统管理员可配置报表章节">
-              <Button icon={<SettingOutlined />} disabled={!isAdmin} onClick={() => navigate('/complaints/reports/template-config')}>章节配置</Button>
-            </Tooltip>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenOpen(true)}>新增报表</Button>
           </Space>
         }
       />
@@ -368,10 +360,10 @@ export default function ComplaintReportList() {
         <Card>
           {filtered.length === 0 ? (
             <Empty
-              description="暂无报表，点击右上角「手动生成报表」创建第一份"
+              description="暂无报表，点击右上角「新增报表」创建第一份"
               style={{ padding: '40px 0' }}
             >
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenOpen(true)}>手动生成报表</Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenOpen(true)}>新增报表</Button>
             </Empty>
           ) : (
             <Table
@@ -385,77 +377,27 @@ export default function ComplaintReportList() {
         </Card>
       </PageContainer>
 
-      {/* 手动生成报表 Modal */}
+      {/* 新增报表 Modal（V1.8 简化：仅选择统计时间范围；数据范围按账号层级自动确定，生成日期即生成成功时间） */}
       <Modal
-        title="手动生成报表"
+        title="新增报表"
         open={genOpen}
         onCancel={() => setGenOpen(false)}
         onOk={handleGenerate}
         okText="生成报表"
         cancelText="取消"
         confirmLoading={generating}
-        width={560}
+        width={520}
         destroyOnClose
       >
-        <Form form={form} layout="vertical" initialValues={{ scope: 'province', generateDate: dayjs() }}>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`数据范围：${ComplaintReportScopeLabels[resolveReportScope(currentUser).scope]} · ${resolveReportScope(currentUser).scopeName}（按当前账号层级自动确定）`}
+        />
+        <Form form={form} layout="vertical">
           <Form.Item label="统计时间范围" name="range" rules={[{ required: true, message: '请选择时间范围' }]}>
             <RangePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            label="报表生成日期"
-            name="generateDate"
-            rules={[
-              { required: true, message: '请选择报表生成日期' },
-              {
-                validator: (_, value) => {
-                  if (!value) return Promise.resolve()
-                  const range: [dayjs.Dayjs, dayjs.Dayjs] | undefined = form.getFieldValue('range')
-                  if (range?.[1] && value.isBefore(range[1].endOf('day'))) {
-                    return Promise.reject(new Error('生成日期不能早于统计周期结束日'))
-                  }
-                  if (value.isAfter(dayjs().endOf('day'))) {
-                    return Promise.reject(new Error('生成日期不能晚于今天'))
-                  }
-                  return Promise.resolve()
-                },
-              },
-            ]}
-            extra="报表落款与归档时间将使用该日期；可选历史日期补录"
-          >
-            <DatePicker showTime style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item label="数据层级" name="scope" rules={[{ required: true }]}>
-            <Radio.Group>
-              {(['province', 'city', 'district'] as ComplaintReportScope[]).map((s) => (
-                <Radio key={s} value={s} disabled={!allowedScopes.includes(s)}>
-                  {ComplaintReportScopeLabels[s]}
-                  {!allowedScopes.includes(s) && <span style={{ color: '#999', fontSize: 12 }}>（您的层级不可选）</span>}
-                </Radio>
-              ))}
-            </Radio.Group>
-          </Form.Item>
-          <Form.Item
-            noStyle
-            shouldUpdate={(prev, cur) => prev.scope !== cur.scope}
-          >
-            {({ getFieldValue }) => {
-              const scope: ComplaintReportScope = getFieldValue('scope')
-              if (scope === 'province') return null
-              return (
-                <Form.Item label={scope === 'city' ? '市州' : '区县'} name="scopeName" rules={[{ required: true, message: '请选择区域' }]}>
-                  <Select
-                    placeholder="选择区域"
-                    options={GUIZHOU_CITIES.map((c) => ({ value: c, label: c }))}
-                  />
-                </Form.Item>
-              )
-            }}
-          </Form.Item>
-          <Form.Item label="AI 文本归因（风险研判段）">
-            <Space>
-              <Tag color="default">二期功能（MVP 未启用）</Tag>
-              <Text type="secondary" style={{ fontSize: 12 }}>MVP 上线后 2 个月内启动</Text>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>
