@@ -25,10 +25,12 @@ import {
   DashboardOutlined,
   UploadOutlined,
   FileExcelOutlined,
+  FileZipOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
+import JSZip from 'jszip'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
 import { useStore } from '../../store'
 import {
@@ -43,8 +45,13 @@ import {
   type ComplaintSource,
   type TourismCategory,
   type Complaint,
+  AttachmentKindLabels,
+  detectAttachmentKind,
+  getComplaintRegions,
+  complaintRegionText,
 } from '../../types'
-import { nowStr } from '../../utils'
+import { nowStr, formatFileSize } from '../../utils'
+import { getAttachmentFile } from '../../utils/attachmentFiles'
 
 const { RangePicker } = DatePicker
 
@@ -107,7 +114,7 @@ interface ImportParseResult {
 export default function ComplaintList() {
   const navigate = useNavigate()
   const { modal, message } = App.useApp()
-  const { complaints, deleteComplaint, importComplaints, currentUser } = useStore()
+  const { complaints, deleteComplaint, importComplaints, updateComplaint, currentUser } = useStore()
   const [form] = Form.useForm()
 
   // 查询条件
@@ -135,11 +142,15 @@ export default function ComplaintList() {
         )
           return false
       }
-      // 按区域级联筛选：选中到哪一级就按哪一级过滤（省/市州/区县）
+      // 按区域级联筛选：投诉可能关联多个区域，任一区域命中即通过（选中到哪一级按哪一级过滤）
       if (region.length > 0) {
-        if (region[0] && c.province !== region[0]) return false
-        if (region[1] && c.city !== region[1]) return false
-        if (region[2] && c.district !== region[2]) return false
+        const matched = getComplaintRegions(c).some((r) => {
+          if (region[0] && r.province !== region[0]) return false
+          if (region[1] && r.city !== region[1]) return false
+          if (region[2] && r.district !== region[2]) return false
+          return true
+        })
+        if (!matched) return false
       }
       if (complaintSource && c.complaintSource !== complaintSource) return false
       if (tourismCategory && c.tourismCategory !== tourismCategory) return false
@@ -255,6 +266,141 @@ export default function ComplaintList() {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
     message.success(`已导出 ${filtered.length} 条记录`)
+  }
+
+  // ===== 打包移交 =====
+  // 文件夹名不能包含的字符
+  const sanitizeFileName = (name: string) => name.replace(/[\\/:*?"<>|\r\n]+/g, '').trim()
+
+  const GENDER_LABELS: Record<string, string> = { male: '男', female: '女', unknown: '未知' }
+
+  // 生成投诉信息 Excel（字段/内容两列布局 + 附件清单工作表），返回二进制内容
+  const buildComplaintWorkbook = (c: Complaint) => {
+    const rows: [string, string][] = [
+      ['投诉编号', c.id],
+      ['投诉标题', c.title],
+      ['所属区域', complaintRegionText(c)],
+      ['投诉来源', ComplaintSourceLabels[c.complaintSource]],
+      ['投诉类别', TourismCategoryLabels[c.tourismCategory] || ''],
+      ['投诉时间', c.complaintTime],
+      ['办理状态', ComplaintStatusLabels[c.status]],
+      ['投诉人姓名', c.complainant.name],
+      ['投诉人性别', c.complainant.gender ? GENDER_LABELS[c.complainant.gender] : ''],
+      ['投诉人电话', c.complainant.phone || ''],
+      ['投诉人邮箱', c.complainant.email || ''],
+      ['投诉人地址', c.complainant.address || ''],
+      ['合同日期', c.complainant.contractDate || ''],
+      ['被投诉人名称', c.respondent.name],
+      ['被投诉人电话', c.respondent.phone || ''],
+      ['被投诉人地址', c.respondent.address || ''],
+      ['投诉内容', c.content],
+      ['投诉请求', c.requests || ''],
+      ['投诉办理人员意见', c.handlerOpinion || ''],
+      ['负责人审核意见', c.reviewerOpinion || ''],
+      ['是否转办', c.isTransferred ? '是' : '否'],
+      ['转办部门', c.isTransferred ? c.transferDepartment || '' : ''],
+      ['移交部门', c.handoverDepartment || ''],
+      ['回复时间', c.replyTime || ''],
+      ['回复内容', c.replyContent || ''],
+      ['备注', c.remark || ''],
+      ['创建人', c.createdBy],
+      ['创建时间', c.createTime],
+      ['更新时间', c.updateTime],
+    ]
+    const ws = XLSX.utils.aoa_to_sheet([['字段', '内容'], ...rows])
+    ws['!cols'] = [{ wch: 18 }, { wch: 100 }]
+
+    const attRows: (string | number)[][] = [
+      ['序号', '附件名称', '附件类型', '大小', '上传时间'],
+      ...c.attachments.map((a, i) => {
+        const kind = a.kind || detectAttachmentKind(a.name, a.type)
+        return [i + 1, a.name, AttachmentKindLabels[kind], formatFileSize(a.size), a.uploadTime]
+      }),
+    ]
+    const attWs = XLSX.utils.aoa_to_sheet(attRows)
+    attWs['!cols'] = [{ wch: 6 }, { wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 22 }]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '投诉信息')
+    XLSX.utils.book_append_sheet(wb, attWs, '附件清单')
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  }
+
+  // 将单条投诉打包为压缩包（含投诉信息 Excel 与全部附件）并触发下载
+  const packageComplaint = async (record: Complaint) => {
+    const folderName = sanitizeFileName(`${record.id}_${record.title}`).slice(0, 80) || record.id
+    const zip = new JSZip()
+    const root = zip.folder(folderName)
+    if (!root) throw new Error('创建压缩文件夹失败')
+
+    // 1. 投诉信息 Excel
+    root.file(`${record.id}_投诉信息表.xlsx`, buildComplaintWorkbook(record))
+
+    // 2. 附件：按 文件/视频/音频 分子文件夹存放
+    const attRoot = root.folder('附件')
+    if (!attRoot) throw new Error('创建附件文件夹失败')
+    if (record.attachments.length === 0) {
+      attRoot.file('说明.txt', '该投诉暂无登记附件。')
+    }
+    for (const a of record.attachments) {
+      const kind = a.kind || detectAttachmentKind(a.name, a.type)
+      const sub = attRoot.folder(AttachmentKindLabels[kind])
+      if (!sub) continue
+      const raw = getAttachmentFile(a.uid)
+      if (raw) {
+        sub.file(a.name, raw)
+      } else {
+        // 演示/历史数据未保存原始文件内容，写入占位说明，便于接收方核对附件清单
+        sub.file(
+          `${a.name}.txt`,
+          `【占位说明】附件「${a.name}」\n类型：${AttachmentKindLabels[kind]}\n大小：${formatFileSize(a.size)}\n上传时间：${a.uploadTime}\n\n该附件为系统演示/历史数据，未保存原始文件内容，请与台账登记人核实后补充原件。`,
+        )
+      }
+    }
+
+    // 3. 生成并下载压缩包
+    const blob = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${folderName}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    // 4. 记录打包操作日志
+    const now = nowStr()
+    updateComplaint(record.id, {
+      updateTime: now,
+      operationLogs: [
+        ...record.operationLogs,
+        {
+          id: `${Date.now()}`,
+          operator: currentUser.name,
+          action: 'export',
+          summary: '打包投诉材料（信息表 + 附件）用于移交',
+          time: now,
+        },
+      ],
+    })
+  }
+
+  const handlePackage = (record: Complaint) => {
+    modal.confirm({
+      title: '确认打包',
+      content: `将把投诉「${record.title}」（${record.id}）的全部信息打包为一个压缩文件夹（含投诉信息 Excel 表和所有附件），供移交其他部门使用。是否继续？`,
+      okText: '打包',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await packageComplaint(record)
+          message.success(`投诉「${record.id}」已打包并开始下载`)
+        } catch {
+          message.error('打包失败，请重试')
+        }
+      },
+    })
   }
 
   // ===== Excel 导入 =====
@@ -547,8 +693,7 @@ export default function ComplaintList() {
       title: '区域',
       width: 200,
       ellipsis: true,
-      render: (_: unknown, r: Complaint) =>
-        [r.province, r.city, r.district].filter(Boolean).join(' / ') || '-',
+      render: (_: unknown, r: Complaint) => complaintRegionText(r) || '-',
     },
     {
       title: '投诉来源',
@@ -591,7 +736,7 @@ export default function ComplaintList() {
     },
     {
       title: '操作',
-      width: 200,
+      width: 260,
       fixed: 'right' as const,
       render: (_: unknown, r: Complaint) => (
         <Space>
@@ -610,6 +755,14 @@ export default function ComplaintList() {
             onClick={() => navigate(`/complaints/${r.id}/edit`)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<FileZipOutlined />}
+            onClick={() => handlePackage(r)}
+          >
+            打包
           </Button>
           <Button
             type="link"

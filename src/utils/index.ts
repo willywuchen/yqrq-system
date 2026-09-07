@@ -10,14 +10,6 @@ import {
   type ComplaintReportSnapshot,
 } from '../types'
 
-// 投诉内容高频关键词词典（用于共性问题提炼，V1.3）
-const COMPLAINT_KEYWORDS = [
-  '强制消费', '强制购物', '价格虚高', '价格未公示', '乱收费', '退款', '退差价',
-  '服务态度', '卫生', '异味', '污渍', '安全', '超载', '虚假宣传', '变更行程',
-  '自费项目', '拒绝退款', '排队', '拥堵', '限流', '导游', '景区', '酒店', '民宿',
-  '旅行社', '停车', '强制拍照',
-]
-
 // 格式化文件大小
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -62,7 +54,9 @@ export function maskIdNumber(idNumber?: string): string {
 
 // 计算投诉报表快照（基于给定投诉列表与时间范围/区域筛选）
 // 复用 ComplaintDashboard 的统计口径，保证报表与看板数据一致
-// V1.3：新增研判分析扩展（关键词/环比/风险等级/典型案例），全部在风险研判段呈现（舆情关联预警已移除）
+// V1.3：新增研判分析扩展（环比/风险等级/典型案例），全部在风险研判段呈现（舆情关联预警已移除）
+// V1.9：本期不接入 AI，移除依赖投诉内容关键词匹配的统计（关键词 Top10、类别×关键词交叉），
+// 随"十、问题分析"章与"问题性质交叉统计"一并下线
 export function buildComplaintReportSnapshot(
   complaints: Complaint[],
   periodStart: string,
@@ -187,21 +181,7 @@ export function buildComplaintReportSnapshot(
   const avgHandleDays = handleDays.length > 0 ? handleDays.reduce((s, n) => s + n, 0) / handleDays.length : 0
 
   // V1.3 研判分析扩展 =====
-  // ① 共性问题提炼：投诉内容高频关键词统计
-  const keywordMap = new Map<string, number>()
-  filtered.forEach((c) => {
-    const text = c.content || ''
-    COMPLAINT_KEYWORDS.forEach((kw) => {
-      if (text.includes(kw)) keywordMap.set(kw, (keywordMap.get(kw) || 0) + 1)
-    })
-  })
-  const keywordStats = Array.from(keywordMap.entries())
-    .map(([keyword, count]) => ({ keyword, count }))
-    .filter((k) => k.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
-
-  // ② 趋势研判：环比变化率（与上一等长周期对比）
+  // ① 趋势研判：环比变化率（与上一等长周期对比）
   const periodDays = Math.max(1, end.diff(start, 'day') + 1)
   const prevEnd = start.subtract(1, 'day')
   const prevStart = prevEnd.subtract(periodDays - 1, 'day')
@@ -212,7 +192,7 @@ export function buildComplaintReportSnapshot(
   }).length
   const momRate = prevPeriodCount === 0 ? 0 : ((total - prevPeriodCount) / prevPeriodCount) * 100
 
-  // ③ 风险等级评定：基于重复投诉次数 + 诉转案
+  // ② 风险等级评定：基于重复投诉次数 + 诉转案
   const riskGrading = respondentClusters
     .map((r) => {
       const hasTransferred = filtered.some((c) => c.respondent?.name === r.name && c.isTransferredToCase)
@@ -235,7 +215,7 @@ export function buildComplaintReportSnapshot(
       return order[b.level] - order[a.level] || b.count - a.count
     })
 
-  // ④ 典型案例：优先选取诉转案 / 重复商家 / 状态异常的代表性投诉
+  // ③ 典型案例：优先选取诉转案 / 重复商家 / 状态异常的代表性投诉
   const typicalCases = filtered
     .filter((c) => c.isTransferredToCase || respondentClusters.some((r) => r.name === c.respondent?.name))
     .slice(0, 3)
@@ -248,7 +228,7 @@ export function buildComplaintReportSnapshot(
         : '同一商家重复投诉，反映系统性问题',
     }))
 
-  // ⑤ 移送问题线索明细（转立案投诉，V1.4 参照线索移送统计分析口径）
+  // ④ 移送问题线索明细（转立案投诉，V1.4 参照线索移送统计分析口径）
   // V1.6：补充区域（县级优先）、移送或涉及部门、线索主题三个维度，供"投诉转办情况"章交叉统计
   const inferTransferDept = (c: Complaint): string => {
     if (c.transferDepartment) return c.transferDepartment
@@ -283,20 +263,6 @@ export function buildComplaintReportSnapshot(
       theme: inferTransferTheme(c),
     }))
 
-  // ⑥ 被投诉对象类别 × 高频问题关键词交叉统计（V1.4 问题性质分析章；V1.5 按类别分组渲染组内占比）
-  const catKwMap = new Map<string, { categoryLabel: string; keyword: string; count: number }>()
-  filtered.forEach((c) => {
-    const categoryLabel = TourismCategoryLabels[c.tourismCategory] || c.tourismCategory
-    const text = c.content || ''
-    COMPLAINT_KEYWORDS.forEach((kw) => {
-      if (!text.includes(kw)) return
-      const key = `${categoryLabel}|${kw}`
-      if (!catKwMap.has(key)) catKwMap.set(key, { categoryLabel, keyword: kw, count: 0 })
-      catKwMap.get(key)!.count++
-    })
-  })
-  const categoryKeywordStats = Array.from(catKwMap.values()).sort((a, b) => b.count - a.count)
-
   return {
     total,
     pending,
@@ -313,11 +279,9 @@ export function buildComplaintReportSnapshot(
     detailIds: filtered.map((c) => c.id),
     regionCategoryClusters,
     respondentClusters,
-    keywordStats,
     prevPeriodCount,
     momRate,
     riskGrading,
-    categoryKeywordStats,
     transferredCases,
     typicalCases,
   }

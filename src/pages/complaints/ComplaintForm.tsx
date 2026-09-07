@@ -14,9 +14,9 @@ import {
   App,
   Row,
   Col,
-  type UploadFile,
+  Segmented,
 } from 'antd'
-import { UploadOutlined } from '@ant-design/icons'
+import { UploadOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import PageHeader, { PageContainer } from '../../components/PageHeader'
@@ -32,10 +32,24 @@ import {
   type ReplyStatus,
   GUIZHOU_REGION_OPTIONS,
   type Attachment,
+  type AttachmentKind,
+  AttachmentKindLabels,
+  AttachmentKindColors,
+  detectAttachmentKind,
+  type ComplaintRegion,
+  getComplaintRegions,
 } from '../../types'
-import { nowStr } from '../../utils'
+import { nowStr, formatFileSize } from '../../utils'
+import { putAttachmentFile, removeAttachmentFile, genAttachmentUid } from '../../utils/attachmentFiles'
 
 const { TextArea } = Input
+
+// 各附件类型对应的文件选择器过滤规则（"文件"不限制类型）
+const ACCEPT_BY_KIND: Record<AttachmentKind, string | undefined> = {
+  file: undefined,
+  video: 'video/*',
+  audio: 'audio/*',
+}
 
 interface Props {
   mode: 'new' | 'edit'
@@ -48,6 +62,7 @@ export default function ComplaintForm({ mode }: Props) {
   const { complaints, addComplaint, updateComplaint, currentUser } = useStore()
   const [form] = Form.useForm()
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [attachmentKind, setAttachmentKind] = useState<AttachmentKind>('file')
   const [submitting, setSubmitting] = useState(false)
 
   const editingId = mode === 'edit' ? params.id : undefined
@@ -57,8 +72,9 @@ export default function ComplaintForm({ mode }: Props) {
     if (editingComplaint) {
       form.setFieldsValue({
         title: editingComplaint.title,
-        region: [editingComplaint.province, editingComplaint.city, editingComplaint.district].filter(
-          Boolean,
+        // 多区域：回填为级联路径数组（兼容旧数据，回退为单区域路径）
+        region: getComplaintRegions(editingComplaint).map((r) =>
+          [r.province, r.city, r.district].filter(Boolean) as string[],
         ),
         complaintSource: editingComplaint.complaintSource,
         tourismCategory: editingComplaint.tourismCategory,
@@ -83,6 +99,7 @@ export default function ComplaintForm({ mode }: Props) {
         reviewerOpinion: editingComplaint.reviewerOpinion,
         isTransferred: editingComplaint.isTransferred || false,
         transferDepartment: editingComplaint.transferDepartment,
+        handoverDepartment: editingComplaint.handoverDepartment,
         replyTime: editingComplaint.replyTime ? dayjs(editingComplaint.replyTime) : undefined,
         replyContent: editingComplaint.replyContent,
         remark: editingComplaint.remark,
@@ -90,7 +107,7 @@ export default function ComplaintForm({ mode }: Props) {
       setAttachments(editingComplaint.attachments || [])
     } else {
       form.setFieldsValue({
-        region: ['贵州省'],
+        region: [['贵州省']],
         status: 'pending',
         isTransferred: false,
       })
@@ -114,18 +131,23 @@ export default function ComplaintForm({ mode }: Props) {
         setSubmitting(true)
         const now = nowStr()
 
-        // 从区域级联选择器中提取省、市州、区县（各级均可只选到任意一级）
-        const regionValue = (values.region as string[]) || []
-        const province = regionValue[0] || '贵州省'
-        const city = regionValue[1] || ''
-        const district = regionValue[2] || undefined
+        // 区域支持多选：每个选中项为一条 省/市州/区县 级联路径
+        const regionPaths = (values.region as string[][]) || []
+        const regions: ComplaintRegion[] = regionPaths.map((p) => ({
+          province: p[0] || '贵州省',
+          city: p[1] || undefined,
+          district: p[2] || undefined,
+        }))
+        // 第一个区域同时写入 province/city/district，兼容列表筛选与报表统计
+        const primary = regions[0] || { province: '贵州省' }
 
         const complaintData: Complaint = {
           id: editingComplaint?.id || generateComplaintId(),
           title: values.title,
-          province,
-          city,
-          district,
+          province: primary.province,
+          city: primary.city || '',
+          district: primary.district,
+          regions,
           complaintSource: values.complaintSource as ComplaintSource,
           tourismCategory: values.tourismCategory as TourismCategory,
           complaintTime: values.complaintTime ? values.complaintTime.format('YYYY-MM-DD') : '',
@@ -154,6 +176,7 @@ export default function ComplaintForm({ mode }: Props) {
           suspectedIssue: editingComplaint?.suspectedIssue,
           isTransferred: !!values.isTransferred,
           transferDepartment: values.isTransferred ? values.transferDepartment : undefined,
+          handoverDepartment: values.handoverDepartment,
           // 回复状态不再单独填写，随办理状态联动（与导入口径一致）
           replyStatus: (values.status === 'closed'
             ? 'closed'
@@ -246,12 +269,14 @@ export default function ComplaintForm({ mode }: Props) {
                 <Form.Item
                   name="region"
                   label="区域"
-                  rules={[{ required: true, message: '请选择区域' }]}
+                  rules={[{ required: true, message: '请至少选择一个区域' }]}
                 >
                   <Cascader
                     options={GUIZHOU_REGION_OPTIONS}
-                    placeholder="请选择区域（省/市州/区县）"
+                    placeholder="请选择区域（可多选，省/市州/区县）"
                     changeOnSelect
+                    multiple
+                    maxTagCount="responsive"
                   />
                 </Form.Item>
               </Col>
@@ -442,40 +467,119 @@ export default function ComplaintForm({ mode }: Props) {
           {/* Section 7 - 附件与备注 */}
           <Card title="附件与备注" style={{ marginBottom: 16 }}>
             <Form.Item label="附件">
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Upload
-                  beforeUpload={(file) => {
-                    const att: Attachment = {
-                      uid: Date.now().toString(),
-                      name: file.name,
-                      size: file.size,
-                      type: file.type || file.name.split('.').pop() || '',
-                      uploadTime: nowStr(),
-                    }
-                    setAttachments((prev) => [...prev, att])
-                    message.success(`${file.name} 上传成功`)
-                    return false
-                  }}
-                  onRemove={(file) => {
-                    setAttachments((prev) => prev.filter((a) => a.uid !== file.uid))
-                  }}
-                  fileList={
-                    attachments.map((a) => ({
-                      uid: a.uid,
-                      name: a.name,
-                      status: 'done' as const,
-                      size: a.size,
-                      type: a.type,
-                    })) as unknown as UploadFile[]
-                  }
-                  multiple
-                >
-                  <Button icon={<UploadOutlined />}>上传附件</Button>
-                </Upload>
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                {/* 第一行：附件类型选择 + 上传按钮 + 说明 */}
+                <Space align="center" wrap>
+                  <Segmented
+                    value={attachmentKind}
+                    onChange={(v) => setAttachmentKind(v as AttachmentKind)}
+                    options={(Object.keys(AttachmentKindLabels) as AttachmentKind[]).map((k) => ({
+                      label: AttachmentKindLabels[k],
+                      value: k,
+                    }))}
+                  />
+                  <Upload
+                    accept={ACCEPT_BY_KIND[attachmentKind]}
+                    showUploadList={false}
+                    beforeUpload={(file) => {
+                      // 按文件实际类型自动识别（如选择"文件"时误选了视频，仍归为视频）
+                      const kind = detectAttachmentKind(file.name, file.type)
+                      const uid = genAttachmentUid()
+                      const att: Attachment = {
+                        uid,
+                        name: file.name,
+                        size: file.size,
+                        type: file.type || file.name.split('.').pop() || '',
+                        kind,
+                        uploadTime: nowStr(),
+                      }
+                      // 暂存原始文件，供"打包移交"时写入压缩包
+                      putAttachmentFile(uid, file)
+                      setAttachments((prev) => [...prev, att])
+                      message.success(`${file.name} 上传成功`)
+                      return false
+                    }}
+                    multiple
+                  >
+                    <Button icon={<UploadOutlined />}>
+                      上传{AttachmentKindLabels[attachmentKind]}
+                    </Button>
+                  </Upload>
+                  <span style={{ color: '#999', fontSize: 12 }}>
+                    支持文件、视频、音频，可混合上传多个，按实际类型自动归类
+                  </span>
+                </Space>
+                {/* 第二行：附件清单 */}
                 {attachments.length > 0 && (
-                  <Tag color="blue">{attachments.length} 个附件</Tag>
+                  <div style={{ border: '1px solid #f0f0f0', borderRadius: 6, padding: '2px 12px' }}>
+                    {attachments.map((a, idx) => {
+                      const kind: AttachmentKind = a.kind || 'file'
+                      return (
+                        <div
+                          key={a.uid}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '6px 0',
+                            borderBottom:
+                              idx < attachments.length - 1 ? '1px solid #f5f5f5' : undefined,
+                          }}
+                        >
+                          <Tag color={AttachmentKindColors[kind]} style={{ marginRight: 0 }}>
+                            {AttachmentKindLabels[kind]}
+                          </Tag>
+                          <span
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {a.name}
+                          </span>
+                          <span style={{ color: '#999', fontSize: 12, flexShrink: 0 }}>
+                            {formatFileSize(a.size)}
+                          </span>
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => {
+                              removeAttachmentFile(a.uid)
+                              setAttachments((prev) => prev.filter((x) => x.uid !== a.uid))
+                            }}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {/* 第三行：数量汇总 */}
+                {attachments.length > 0 && (
+                  <Space size={4} wrap>
+                    {(Object.keys(AttachmentKindLabels) as AttachmentKind[]).map((k) => {
+                      const n = attachments.filter((a) => (a.kind || 'file') === k).length
+                      return n > 0 ? (
+                        <Tag key={k} color={AttachmentKindColors[k]}>
+                          {AttachmentKindLabels[k]} {n} 个
+                        </Tag>
+                      ) : null
+                    })}
+                    <Tag color="blue">共 {attachments.length} 个附件</Tag>
+                  </Space>
                 )}
               </Space>
+            </Form.Item>
+            <Form.Item name="handoverDepartment" label="移交部门">
+              <Input
+                placeholder="请输入移交部门名称（如：贵阳市文化市场综合行政执法支队）"
+                maxLength={100}
+                allowClear
+              />
             </Form.Item>
             <Form.Item name="remark" label="备注">
               <TextArea rows={3} placeholder="请输入备注信息" />

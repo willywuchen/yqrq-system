@@ -29,11 +29,9 @@ function normalizeSnapshot(s: any): ComplaintReportSnapshot {
     detailIds: s?.detailIds ?? [],
     regionCategoryClusters: s?.regionCategoryClusters ?? [],
     respondentClusters: s?.respondentClusters ?? [],
-    keywordStats: s?.keywordStats ?? [],
     prevPeriodCount: s?.prevPeriodCount ?? 0,
     momRate: s?.momRate ?? 0,
     riskGrading: s?.riskGrading ?? [],
-    categoryKeywordStats: s?.categoryKeywordStats ?? [],
     transferredCases: (s?.transferredCases ?? []).map((c: any) => ({
       id: c?.id ?? '',
       respondentName: c?.respondentName ?? '未知',
@@ -185,20 +183,13 @@ function trendNote(s: ComplaintReportSnapshot): string {
   return `近6个月投诉量整体${dir}。${peak.label}为投诉峰值（${peak.count}件），与旅游旺季游客量集中、涉旅消费纠纷增多相符；${low.label}投诉量最低（${low.count}件）。建议在旺季来临前提前部署值守与应急处置力量。`
 }
 
+// V1.10：解读基于前十被投诉对象统计（不再涉及投诉内容分析）
 function problemAnalysisNote(s: ComplaintReportSnapshot): string {
-  if (s.categoryKeywordStats.length === 0 && s.topRespondents.length === 0) {
-    return '本期未命中高频问题关键词，也无被投诉对象统计数据。'
+  if (s.topRespondents.length === 0) {
+    return '本期无被投诉对象统计数据。'
   }
-  const parts: string[] = []
-  if (s.categoryKeywordStats.length > 0) {
-    const topKw = s.categoryKeywordStats[0]
-    parts.push(`从投诉问题性质看，${topKw.categoryLabel}类投诉主要集中于"${topKw.keyword}"等问题`)
-  }
-  const top5 = s.topRespondents.slice(0, 5)
-  if (top5.length > 0) {
-    parts.push(`投诉量前五的被投诉对象依次为${top5.map((r, i) => `${i + 1}.${r.name}（${r.count}件）`).join('、')}`)
-  }
-  return `${parts.join('；')}。被投诉对象集中的问题反映共性短板，建议督促相关经营主体对照整改并跟踪复查。`
+  const top = s.topRespondents[0]
+  return `投诉量前十的被投诉对象见上表，其中「${top.name}」以 ${top.count} 件居首。被投诉对象集中的问题反映共性短板，建议督促相关经营主体对照整改并跟踪复查。`
 }
 
 function topRespondentsNote(s: ComplaintReportSnapshot): string {
@@ -249,53 +240,21 @@ function qualityHtml(s: ComplaintReportSnapshot): string {
   </tbody></table>`
 }
 
-// 从投诉问题性质划分（V1.5：（一）参照公文图三结构——投诉对象类型纵向合并 + 组内占比；（二）投诉量前五被投诉对象）
+// 投诉量前十的被投诉对象（V1.9：问题性质章不再做类别×关键词交叉统计（依赖投诉内容分析）；
+// V1.10：章名更名「投诉量前十的被投诉对象」，去掉（一）小节标题，表格由前五扩为前十）
 function problemAnalysisHtml(s: ComplaintReportSnapshot): string {
-  // （一）按类别分组：类别按组合计降序，组内按件数降序（每组最多 5 项），占比为组内占比
-  const groups = new Map<string, { keyword: string; count: number }[]>()
-  s.categoryKeywordStats.forEach((r) => {
-    if (!groups.has(r.categoryLabel)) groups.set(r.categoryLabel, [])
-    groups.get(r.categoryLabel)!.push({ keyword: r.keyword, count: r.count })
-  })
-  const groupEntries = Array.from(groups.entries())
-    .map(([label, items]) => {
-      const sorted = [...items].sort((a, b) => b.count - a.count).slice(0, 5)
-      return { label, items: sorted, total: sorted.reduce((sum, i) => sum + i.count, 0) }
-    })
-    .sort((a, b) => b.total - a.total)
-  let crossRows: string
-  if (groupEntries.length === 0) {
-    crossRows = '<tr><td colspan="4" style="text-align:center;color:#999;padding:8px">本期投诉内容未命中高频问题关键词</td></tr>'
-  } else {
-    crossRows = groupEntries
-      .map((g) =>
-        g.items
-          .map((it, idx) => `<tr>${idx === 0 ? `<td rowspan="${g.items.length}" style="text-align:center;padding:4px 10px;border:1px solid #e8e8e8;font-weight:600">${g.label}<div style="color:#999;font-weight:400;font-size:10px;margin-top:2px">${g.total}件</div></td>` : ''}<td style="padding:4px 10px;border:1px solid #e8e8e8">${it.keyword}</td><td style="text-align:center;padding:4px 10px;border:1px solid #e8e8e8;font-weight:600">${it.count}</td><td style="text-align:center;padding:4px 10px;border:1px solid #e8e8e8">${g.total > 0 ? ((it.count / g.total) * 100).toFixed(2) : '-'}%</td></tr>`)
-          .join(''),
-      )
-      .join('')
-  }
-  const top5 = s.topRespondents.slice(0, 5)
-  const top5Rows = top5.length === 0
+  const top10 = s.topRespondents.slice(0, 10)
+  const rows = top10.length === 0
     ? '<tr><td colspan="4" style="text-align:center;color:#999;padding:8px">无被投诉对象统计数据</td></tr>'
-    : top5
+    : top10
         .map((r, i) => `<tr><td style="text-align:center;padding:4px 10px;border:1px solid #e8e8e8">${i + 1}</td><td style="padding:4px 10px;border:1px solid #e8e8e8">${r.name}</td><td style="text-align:center;padding:4px 10px;border:1px solid #e8e8e8;font-weight:600">${r.count}</td><td style="padding:4px 10px;border:1px solid #e8e8e8">${r.lastComplaintTime || '-'}</td></tr>`)
         .join('')
-  return `<div style="color:#666;font-size:11px;margin-bottom:6px">（一）被投诉对象类别与主要问题交叉统计</div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px"><thead><tr>
-      <th style="width:28%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">投诉对象类型</th>
-      <th style="border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">投诉问题</th>
-      <th style="width:14%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">投诉量（件）</th>
-      <th style="width:12%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">占比</th>
-    </tr></thead><tbody>${crossRows}</tbody></table>
-    <div style="color:#999;font-size:10px;margin:-8px 0 12px">注：占比为该投诉对象类型内部的构成占比。</div>
-    <div style="color:#666;font-size:11px;margin-bottom:6px">（二）投诉量前五的被投诉对象</div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>
+  return `<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>
       <th style="width:8%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">排名</th>
       <th style="border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">被投诉对象</th>
       <th style="width:14%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">投诉量（件）</th>
       <th style="width:18%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">最近投诉时间</th>
-    </tr></thead><tbody>${top5Rows}</tbody></table>`
+    </tr></thead><tbody>${rows}</tbody></table>`
 }
 
 // 移送问题线索情况：转立案统计 + 线索明细（V1.4 参照《发现问题及移送线索统计分析》）
@@ -399,59 +358,6 @@ function transferAnalysisHtml(s: ComplaintReportSnapshot): string {
   return `${crossTable('按移送或涉及部门统计', 'department')}${paras.map((p) => `<p style="line-height:1.8;text-indent:2em;margin:0 0 6px">${p}</p>`).join('')}`
 }
 
-// 问题分析（V1.4 公文体："一是/二是/三是/四是"特点归纳 + 风险分级 + 典型案例）
-// V1.8：仅移除"AI 归因结论"占位与提示文字，问题分析正文保留
-function aiInsightHtml(report: ComplaintReport): string {
-  const s = normalizeSnapshot(report.snapshot)
-  const paras: string[] = []
-  const pStyle = 'style="line-height:1.8;text-indent:2em;margin:0 0 8px"'
-
-  // 一是：投诉总量环比变化
-  const momText = s.prevPeriodCount === 0
-    ? '上期无数据，环比不可比'
-    : `较上期（${s.prevPeriodCount} 件）${s.momRate >= 0 ? '上升' : '下降'} ${Math.abs(s.momRate).toFixed(1)}%`
-  paras.push(`<p ${pStyle}><b>一是投诉总量环比变化。</b>本期共受理投诉 ${s.total} 件，${momText}。</p>`)
-
-  // 二是：区域×类型高发组合
-  if (s.regionCategoryClusters.length > 0) {
-    const rc = s.regionCategoryClusters.slice(0, 3).map((r) => `${r.region}${r.categoryLabel}领域（${r.count}件）`).join('、')
-    paras.push(`<p ${pStyle}><b>二是部分区域和业态投诉较为集中。</b>本期高发组合为${rc}，反映相关区域业态存在共性问题，建议属地部门开展针对性巡查。</p>`)
-  } else {
-    paras.push(`<p ${pStyle}><b>二是区域业态分布总体均衡。</b>本期未发现同一区域同类投诉达 2 件及以上的高发组合。</p>`)
-  }
-
-  // 三是：同一商家重复投诉 + 风险分级表
-  let riskTable = ''
-  if (s.respondentClusters.length > 0) {
-    const top = s.respondentClusters[0]
-    paras.push(`<p ${pStyle}><b>三是同一商家重复投诉问题需关注。</b>本期共有 ${s.respondentClusters.length} 家商家被重复投诉（≥2次），其中"${top.name}"被投诉 ${top.count} 次（涉及${top.categories.join('、')}），疑似存在系统性经营问题，建议作为监管重点。</p>`)
-    const levelLabels = { red: '红色', orange: '橙色', yellow: '黄色' }
-    const levelColors = { red: '#d4380d', orange: '#fa8c16', yellow: '#faad14' }
-    const gradeRows = s.riskGrading.length === 0
-      ? ''
-      : s.riskGrading
-          .map((r) => `<tr><td style="border:1px solid #e8e8e8;padding:4px 10px">${r.name}</td><td style="text-align:center;border:1px solid #e8e8e8;padding:4px 10px"><span style="color:#fff;background:${levelColors[r.level]};padding:1px 6px;border-radius:3px;font-size:11px">${levelLabels[r.level]}</span></td><td style="text-align:center;border:1px solid #e8e8e8;padding:4px 10px">${r.count}</td><td style="border:1px solid #e8e8e8;padding:4px 10px;font-size:11px">${r.reason}</td></tr>`)
-          .join('')
-    riskTable = `<div style="color:#666;font-size:11px;margin:4px 0 6px">商家风险等级评定</div>
-      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px"><thead><tr>
-        <th style="border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">商家</th>
-        <th style="width:10%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">等级</th>
-        <th style="width:10%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">次数</th>
-        <th style="width:45%;border:1px solid #d9d9d9;padding:4px 10px;background:#fafafa">研判依据</th>
-      </tr></thead><tbody>${gradeRows}</tbody></table>`
-  } else {
-    paras.push(`<p ${pStyle}><b>三是市场秩序总体平稳。</b>本期未发现同一商家重复投诉情况。</p>`)
-  }
-
-  // 四是：共性问题
-  if (s.keywordStats.length > 0) {
-    const kws = s.keywordStats.slice(0, 5).map((k) => `${k.keyword}（${k.count}件）`).join('、')
-    paras.push(`<p ${pStyle}><b>四是共性问题以"${s.keywordStats[0].keyword}"等为主。</b>本期投诉内容高频问题关键词包括${kws}，建议督促相关经营主体对照整改。</p>`)
-  }
-
-  return paras.join('') + riskTable
-}
-
 function buildOverviewText(report: ComplaintReport): string {
   const s = normalizeSnapshot(report.snapshot)
   const scope = report.scopeName
@@ -471,35 +377,21 @@ function buildOverviewText(report: ComplaintReport): string {
   return `${period}，${scope}共受理旅游投诉 ${s.total} 件，其中未办结 ${s.pending} 件、已办结 ${s.closedCount} 件。${methodText}${regionText}${categoryText}${momText}`
 }
 
-function buildAdviceText(report: ComplaintReport): string {
-  const s = normalizeSnapshot(report.snapshot)
-  if (s.total === 0) {
-    return '（一）本周期无投诉，建议继续保持现有监管力度，加强节假日应急值守。'
-  }
-  // 以聚类数据驱动建议，给出可执行指引（约谈谁、关注哪个区域哪类）
-  const advice: string[] = []
-  s.respondentClusters.slice(0, 3).forEach((r) => {
-    advice.push(`约谈/专项检查"${r.name}"：本期被投诉 ${r.count} 次，涉及${r.categories.join('、')}，最近投诉时间 ${r.lastComplaintTime || '-'}，建议下发整改通知并跟踪复查。`)
-  })
-  s.regionCategoryClusters.slice(0, 3).forEach((r) => {
-    advice.push(`重点巡查 ${r.region} 的 ${r.categoryLabel} 领域：本期同类投诉 ${r.count} 件，建议联合属地文旅、市场监管部门开展专项巡查。`)
-  })
-  if (s.transferredCount > 0) {
-    advice.push(`跟踪 ${s.transferredCount} 件移送问题线索（转立案）处置进展，涉嫌违法线索已移交执法部门，建议定期对接结果反馈。`)
-  }
-  if (s.pending > 0) {
-    advice.push(`推进 ${s.pending} 件待办投诉清零，避免节假日前夕积压。`)
-  }
-  if (advice.length === 0) {
-    advice.push('本周期投诉态势平稳，建议继续保持现有监管力度。')
-  }
-  return advice.map((a, i) => `（${['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'][i] || i + 1}）${a}`).join('<br/>')
+// V1.9 下线章节：依赖投诉内容语义分析（本期不接入 AI）。
+// 历史报表冻结的章节列表中可能仍含这两类，渲染时一并过滤，避免出现空标题章节
+const REMOVED_CHAPTER_KINDS = new Set<string>(['ai_insight', 'advice'])
+
+// V1.10 章名覆盖：第六章更名后，历史报表冻结的旧标题（「六、从投诉问题性质划分」）在渲染时统一纠正
+const CHAPTER_TITLE_OVERRIDES: Partial<Record<string, string>> = {
+  problem_analysis: '六、投诉量前十的被投诉对象',
 }
 
 export function buildComplaintReportHtml(report: ComplaintReport): string {
   const s = normalizeSnapshot(report.snapshot)
   const scopeLabel = `${ComplaintReportScopeLabels[report.scopeLevel]} · ${report.scopeName}`
-  const chapters = (report.chapters || []).filter((c) => c.enabled)
+  const chapters = (report.chapters || [])
+    .filter((c) => c.enabled && !REMOVED_CHAPTER_KINDS.has(c.kind))
+    .map((c) => ({ ...c, title: CHAPTER_TITLE_OVERRIDES[c.kind] ?? c.title }))
 
   const anchors = chapters
     .map(
@@ -540,10 +432,6 @@ export function buildComplaintReportHtml(report: ComplaintReport): string {
           return sectionHtml(id, c.title, topRespondentsHtml(s) + chartNote(topRespondentsNote(s)))
         case 'quality':
           return sectionHtml(id, c.title, qualityHtml(s) + chartNote(qualityNote(s)))
-        case 'ai_insight':
-          return sectionHtml(id, c.title, aiInsightHtml(report))
-        case 'advice':
-          return sectionHtml(id, c.title, `<p style="line-height:1.8">${buildAdviceText(report)}</p>`)
         case 'detail_attach':
           return sectionHtml(
             id,

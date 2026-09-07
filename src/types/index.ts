@@ -176,11 +176,40 @@ export const UserRoleLabels: Record<UserRole, string> = {
 };
 
 // ========== 附件 ==========
+// 附件类型：文件 / 视频 / 音频
+export type AttachmentKind = 'file' | 'video' | 'audio';
+
+export const AttachmentKindLabels: Record<AttachmentKind, string> = {
+  file: '文件',
+  video: '视频',
+  audio: '音频',
+};
+
+// 附件类型对应的主题色（用于标签展示）
+export const AttachmentKindColors: Record<AttachmentKind, string> = {
+  file: 'blue',
+  video: 'purple',
+  audio: 'cyan',
+};
+
+// 根据文件 MIME 类型或扩展名识别附件类型
+export function detectAttachmentKind(name: string, mime?: string): AttachmentKind {
+  if (mime?.startsWith('video/') || /\.(mp4|mov|avi|mkv|wmv|flv|webm|m4v|3gp)$/i.test(name)) {
+    return 'video';
+  }
+  if (mime?.startsWith('audio/') || /\.(mp3|wav|wma|aac|flac|ogg|m4a|amr)$/i.test(name)) {
+    return 'audio';
+  }
+  return 'file';
+}
+
 export interface Attachment {
   uid: string;
   name: string;
   size: number;
   type: string;
+  // 附件类型：文件 / 视频 / 音频（缺省视为"文件"）
+  kind?: AttachmentKind;
   url?: string;
   uploadTime: string;
   // 附件分组（按附件2材料清单分组）
@@ -467,12 +496,21 @@ export interface ComplaintOperationLog {
   time: string;
 }
 
+// 投诉区域（支持多区域）：省 / 市州 / 区县（后两级可选）
+export interface ComplaintRegion {
+  province: string;
+  city?: string;
+  district?: string;
+}
+
 export interface Complaint {
   id: string;
   title: string;
   province: string;
   city: string;
   district?: string;
+  // 多区域选择（新增/编辑时支持）：兼容旧数据，province/city/district 始终保存第一个区域
+  regions?: ComplaintRegion[];
   complaintSource: ComplaintSource;
   tourismCategory: TourismCategory;
   complaintTime: string;
@@ -501,6 +539,8 @@ export interface Complaint {
   // 是否转办及转办部门（办理与审核环节）
   isTransferred?: boolean;
   transferDepartment?: string;
+  // 移交部门（附件与备注环节，手动填写，用于投诉材料打包移交）
+  handoverDepartment?: string;
   // 转办/移送线索主题（如：价格秩序及商品经营、旅游交通客运等，用于报表转办分析）
   transferTheme?: string;
   replyStatus: ReplyStatus;
@@ -513,6 +553,20 @@ export interface Complaint {
   updateTime: string;
   operationLogs: ComplaintOperationLog[];
   importBatchNo?: string;
+}
+
+// 取投诉的全部区域：优先多区域字段，旧数据回退到省/市州/区县单区域
+export function getComplaintRegions(c: Complaint): ComplaintRegion[] {
+  if (c.regions && c.regions.length > 0) return c.regions
+  return [{ province: c.province, city: c.city, district: c.district }]
+}
+
+// 投诉区域的展示文本：多区域用"、"分隔，单个区域内部用" / "
+export function complaintRegionText(c: Complaint, separator = '、'): string {
+  return getComplaintRegions(c)
+    .map((r) => [r.province, r.city, r.district].filter(Boolean).join(' / '))
+    .filter(Boolean)
+    .join(separator)
 }
 
 // 贵州省市州列表（用于区域级联）
@@ -629,16 +683,13 @@ export interface ComplaintReportSnapshot {
   // 聚类分析（V1.2：同一区域×相同类型 + 同一商家重复投诉，V1.3 起并入风险研判段呈现）
   regionCategoryClusters: { region: string; categoryLabel: string; count: number }[]
   respondentClusters: { name: string; count: number; categories: string[]; lastComplaintTime: string }[]
-  // V1.3 研判分析扩展（全部在风险研判段呈现，不再单独列章）
-  // 投诉内容高频关键词
-  keywordStats: { keyword: string; count: number }[]
   // 上期投诉量与环比变化率（%，正为上升）
+  // V1.9：移除关键词统计（keywordStats）与类别×关键词交叉统计（categoryKeywordStats），
+  // 两者依赖投诉内容关键词匹配分析，随"十、问题分析"章与"问题性质交叉统计"一并下线
   prevPeriodCount: number
   momRate: number
   // 商家风险等级评定（红/橙/黄）
   riskGrading: { name: string; level: 'red' | 'orange' | 'yellow'; count: number; reason: string }[]
-  // 被投诉对象类别 × 高频问题关键词交叉统计（V1.4 问题性质分析章）
-  categoryKeywordStats: { categoryLabel: string; keyword: string; count: number }[]
   // 移送问题线索明细（转立案投诉，V1.4 参照线索移送统计分析口径；V1.6 增加区域/移送部门/线索主题维度）
   transferredCases: {
     id: string
@@ -703,18 +754,18 @@ export interface ComplaintReportArchiveLog {
 // V1.4 统一报表默认章节（公文结构：参照《贵州省旅游投诉受处工作情况》+《发现问题及移送线索统计分析》）
 // V1.8：报表模板固化为该套章节，不再提供"章节配置"功能；"核心指标"更名"投诉总量"；
 // 问题分析章保留（环比/高发组合/重复投诉风险分级/共性问题），仅不再展示"AI 归因结论"占位文字
+// V1.9：本期不接入 AI，移除依赖投诉内容分析的"十、问题分析""十一、下步工作建议"两章
+// （ai_insight/advice 章节类型保留以兼容历史报表数据）
 export const DEFAULT_REPORT_CHAPTERS: ComplaintReportChapter[] = [
   { kind: 'overview', title: '一、总体情况', enabled: true },
   { kind: 'core_metrics', title: '二、投诉总量', enabled: true },
   { kind: 'method_pie', title: '三、从投诉来源划分', enabled: true },
   { kind: 'region_bar', title: '四、从行政区域划分', enabled: true },
   { kind: 'category_bar', title: '五、从被投诉对象划分', enabled: true },
-  { kind: 'problem_analysis', title: '六、从投诉问题性质划分', enabled: true },
+  { kind: 'problem_analysis', title: '六、投诉量前十的被投诉对象', enabled: true },
   { kind: 'transfer_analysis', title: '七、投诉转办情况', enabled: true },
   { kind: 'status_donut', title: '八、处理状态分布', enabled: true },
   { kind: 'trend_line', title: '九、投诉数量趋势（近6个月）', enabled: true },
-  { kind: 'ai_insight', title: '十、问题分析', enabled: true },
-  { kind: 'advice', title: '十一、下步工作建议', enabled: true },
   { kind: 'detail_attach', title: '附件：投诉明细', enabled: true },
 ]
 

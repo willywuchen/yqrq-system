@@ -9,6 +9,10 @@ import {
   ComplaintSourceLabels,
   TourismCategoryLabels,
   type ComplaintStatus,
+  AttachmentKindLabels,
+  AttachmentKindColors,
+  detectAttachmentKind,
+  complaintRegionText,
 } from '../../types'
 import { formatFileSize } from '../../utils'
 
@@ -78,7 +82,7 @@ export default function ComplaintDetail() {
     delete: 'red',
   }
 
-  const region = [complaint.province, complaint.city, complaint.district].filter(Boolean).join(' ')
+  const region = complaintRegionText(complaint, ' ')
 
   return (
     <>
@@ -186,6 +190,9 @@ export default function ComplaintDetail() {
             <Descriptions.Item label="转办部门">
               {complaint.isTransferred ? complaint.transferDepartment || '-' : '-'}
             </Descriptions.Item>
+            <Descriptions.Item label="移交部门">
+              {complaint.handoverDepartment || '-'}
+            </Descriptions.Item>
           </Descriptions>
         </Card>
 
@@ -218,6 +225,9 @@ export default function ComplaintDetail() {
                   }}
                 >
                   <Space>
+                    <Tag color={AttachmentKindColors[file.kind || detectAttachmentKind(file.name, file.type)]}>
+                      {AttachmentKindLabels[file.kind || detectAttachmentKind(file.name, file.type)]}
+                    </Tag>
                     {file.title && <Tag color="blue">{file.title}</Tag>}
                     <Text>{file.name}</Text>
                     <Text type="secondary" style={{ fontSize: 12 }}>
