@@ -389,7 +389,7 @@ export default function ComplaintList() {
   const handlePackage = (record: Complaint) => {
     modal.confirm({
       title: '确认打包',
-      content: `将把投诉「${record.title}」（${record.id}）的全部信息打包为一个压缩文件夹（含投诉信息 Excel 表和所有附件），供移交其他部门使用。是否继续？`,
+      content: `将把投诉「${record.title}」（${record.id}）的全部信息打包为一个压缩文件夹（含投诉信息 Excel 表和所有附件）。是否继续？`,
       okText: '打包',
       cancelText: '取消',
       onOk: async () => {
