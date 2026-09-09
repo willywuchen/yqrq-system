@@ -27,6 +27,13 @@ import {
   BookOutlined,
   AppstoreOutlined,
   SoundOutlined,
+  SafetyCertificateOutlined,
+  TeamOutlined,
+  HistoryOutlined,
+  OrderedListOutlined,
+  ShoppingOutlined,
+  BankOutlined,
+  CoffeeOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useStore } from '../store'
@@ -92,6 +99,46 @@ const announcementManageMenu = {
   ],
 }
 
+// 旅行社端工作台 - 设置中心/产品管理/电子行程单（PRD 2026-09-08 V1.3，applicant 角色专属）
+// 原资质管理 + 旅行社资料合并为"信息认证"
+const agencySettingsMenu = {
+  key: 'agency-settings',
+  icon: <SettingOutlined />,
+  label: '设置中心',
+  children: [
+    { key: '/agency/settings/certification', icon: <SafetyCertificateOutlined />, label: '信息认证' },
+    { key: '/agency/settings/accounts', icon: <TeamOutlined />, label: '账号管理' },
+    { key: '/agency/settings/profile', icon: <UserOutlined />, label: '个人资料' },
+    { key: '/agency/settings/logs', icon: <HistoryOutlined />, label: '操作记录' },
+  ],
+}
+
+const agencyProductMenu = {
+  key: 'agency-product',
+  icon: <AppstoreOutlined />,
+  label: '产品管理',
+  children: [
+    { key: '/agency/products', icon: <FileTextOutlined />, label: '产品线路' },
+    { key: '/agency/merchants/scenic', icon: <EnvironmentOutlined />, label: '景区景点' },
+    { key: '/agency/merchants/shop', icon: <ShoppingOutlined />, label: '购物店' },
+    { key: '/agency/merchants/hotel', icon: <BankOutlined />, label: '酒店住宿' },
+    { key: '/agency/merchants/restaurant', icon: <CoffeeOutlined />, label: '餐饮服务' },
+    { key: '/agency/merchants/homestay', icon: <HomeOutlined />, label: '民宿' },
+  ],
+}
+
+// 团行程管理 - 一级菜单（团行程单 + 合同管理占位）
+// 合同管理功能已在既有系统开发完成，正式开发时接入即可，此处仅保留菜单占位
+const tourManagementMenu = {
+  key: 'tour-management',
+  icon: <OrderedListOutlined />,
+  label: '团行程管理',
+  children: [
+    { key: '/agency/itineraries', icon: <OrderedListOutlined />, label: '团行程单' },
+    { key: '/agency/contracts', icon: <FileTextOutlined />, label: '合同管理' },
+  ],
+}
+
 const roleMenuMap: Record<UserRole, any[]> = {
   applicant: [
     {
@@ -114,6 +161,10 @@ const roleMenuMap: Record<UserRole, any[]> = {
         { key: '/subsidy', icon: <FileTextOutlined />, label: '补贴申报列表' },
       ],
     },
+    // 旅行社端工作台（设置中心/产品管理/电子行程单，PRD 2026-09-08 V1.3）
+    agencySettingsMenu,
+    agencyProductMenu,
+    tourManagementMenu,
     // 文库查看（旅行社只读入口，PRD §2.3）
     {
       key: '/training',
@@ -185,6 +236,12 @@ const roleMenuMap: Record<UserRole, any[]> = {
         { key: '/complaints/dashboard', icon: <BarChartOutlined />, label: '数据看板' },
         { key: '/complaints/reports', icon: <FileTextOutlined />, label: '数据报表' },
       ],
+    },
+    // 团行程单查询（文旅厅只读：所有旅行社已提交的团行程单）
+    {
+      key: '/tour/itineraries',
+      icon: <OrderedListOutlined />,
+      label: '团行程单查询',
     },
     {
       key: 'opinion-management',

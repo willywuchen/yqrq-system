@@ -31,6 +31,8 @@ import type { TrainingCategory, TrainingMaterial } from '../types/training'
 import { MockTrainingCategories, MockTrainingMaterials } from '../mock/training'
 import type { Announcement, AnnouncementCategory, AnnouncementConfirmMethod, AnnouncementReadRecord } from '../types/announcements'
 import { MockAnnouncements, MockAnnouncementCategories, MockAnnouncementReads } from '../mock/announcements'
+import type { Merchant, RouteProduct, EItinerary, AgencyAccount, AgencyCertification, AgencyOperationLog } from '../types/agency'
+import { MockMerchants, MockRouteProducts, MockItineraries, MockAgencyAccounts, MockCertification, MockAgencyLogs } from '../mock/agency'
 
 // 深拷贝工具函数（避免循环引用，针对 mock 数据结构优化）
 function deepClone<T>(obj: T): T {
@@ -78,6 +80,13 @@ const DEMO_SNAPSHOT = {
   // 学习培训管理
   trainingCategories: deepClone(MockTrainingCategories),
   trainingMaterials: deepClone(MockTrainingMaterials),
+  // 旅行社端工作台（设置中心/产品管理/电子行程单）
+  agencyMerchants: deepClone(MockMerchants),
+  agencyProducts: deepClone(MockRouteProducts),
+  agencyItineraries: deepClone(MockItineraries),
+  agencyAccounts: deepClone(MockAgencyAccounts),
+  agencyCertification: deepClone(MockCertification),
+  agencyLogs: deepClone(MockAgencyLogs),
   // 公告发布管理
   announcementCategories: deepClone(MockAnnouncementCategories),
   announcements: deepClone(MockAnnouncements),
@@ -241,6 +250,36 @@ interface AppState {
     account: { id: string; name: string; userType: 'dept' | 'agency'; orgName: string },
     method: AnnouncementConfirmMethod,
   ) => void
+
+  // ========== 旅行社端工作台（设置中心/产品管理/电子行程单） ==========
+  agencyMerchants: Merchant[]
+  agencyProducts: RouteProduct[]
+  agencyItineraries: EItinerary[]
+  agencyAccounts: AgencyAccount[]
+  agencyCertification: AgencyCertification
+  agencyLogs: AgencyOperationLog[]
+  // 商家池：新增（入池即全平台选择器共享）、编辑/停用/删除（仅本社创建的商家）
+  addAgencyMerchant: (m: Merchant) => void
+  updateAgencyMerchant: (id: string, patch: Partial<Merchant>) => void
+  deleteAgencyMerchant: (id: string) => void
+  // 线路产品：登记完成即生效（无需审核）
+  addAgencyProduct: (p: RouteProduct) => void
+  updateAgencyProduct: (id: string, patch: Partial<RouteProduct>) => void
+  deleteAgencyProduct: (id: string) => void
+  // 行程单：保存/删除/提交（省文旅可见）/撤销提交
+  saveAgencyItinerary: (it: EItinerary) => void
+  deleteAgencyItinerary: (id: string) => void
+  submitAgencyItinerary: (id: string) => void
+  withdrawAgencyItinerary: (id: string) => void
+  // 信息认证：重新提交审核 / 模拟平台审核（演示）；审核期间系统功能不受限
+  submitCertification: (data: AgencyCertification) => void
+  settleCertification: (result: 'approved' | 'rejected', reason?: string) => void
+  // 账号管理
+  addAgencyAccount: (a: AgencyAccount) => void
+  updateAgencyAccount: (id: string, patch: Partial<AgencyAccount>) => void
+  deleteAgencyAccount: (id: string) => void
+  // 操作记录
+  appendAgencyLog: (log: AgencyOperationLog) => void
 }
 
 export const useStore = create<AppState>()(
@@ -331,6 +370,13 @@ export const useStore = create<AppState>()(
           announcementCategories: deepClone(MockAnnouncementCategories),
           announcements: [],
           announcementReads: [],
+          // 旅行社端工作台：商家/产品/行程单/日志清空；账号保留主账号（个人资料页依赖）；认证重置为已认证
+          agencyMerchants: [],
+          agencyProducts: [],
+          agencyItineraries: [],
+          agencyAccounts: deepClone(MockAgencyAccounts).filter((a) => a.role === 'owner'),
+          agencyLogs: [],
+          agencyCertification: { ...deepClone(MockCertification) },
         })
       },
 
@@ -368,6 +414,13 @@ export const useStore = create<AppState>()(
           announcementCategories: deepClone(DEMO_SNAPSHOT.announcementCategories),
           announcements: deepClone(DEMO_SNAPSHOT.announcements),
           announcementReads: deepClone(DEMO_SNAPSHOT.announcementReads),
+          // 旅行社端工作台
+          agencyMerchants: deepClone(DEMO_SNAPSHOT.agencyMerchants),
+          agencyProducts: deepClone(DEMO_SNAPSHOT.agencyProducts),
+          agencyItineraries: deepClone(DEMO_SNAPSHOT.agencyItineraries),
+          agencyAccounts: deepClone(DEMO_SNAPSHOT.agencyAccounts),
+          agencyCertification: deepClone(DEMO_SNAPSHOT.agencyCertification),
+          agencyLogs: deepClone(DEMO_SNAPSHOT.agencyLogs),
         }),
 
       // 投诉台账
@@ -697,12 +750,114 @@ export const useStore = create<AppState>()(
             ],
           }
         }),
+
+      // ========== 旅行社端工作台 ==========
+      agencyMerchants: deepClone(MockMerchants),
+      addAgencyMerchant: (m) =>
+        set((state) => ({ agencyMerchants: [m, ...state.agencyMerchants] })),
+      updateAgencyMerchant: (id, patch) =>
+        set((state) => ({
+          agencyMerchants: state.agencyMerchants.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+        })),
+      deleteAgencyMerchant: (id) =>
+        set((state) => ({ agencyMerchants: state.agencyMerchants.filter((m) => m.id !== id) })),
+
+      agencyProducts: deepClone(MockRouteProducts),
+      addAgencyProduct: (p) =>
+        set((state) => ({ agencyProducts: [p, ...state.agencyProducts] })),
+      updateAgencyProduct: (id, patch) =>
+        set((state) => ({
+          agencyProducts: state.agencyProducts.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        })),
+      deleteAgencyProduct: (id) =>
+        set((state) => ({ agencyProducts: state.agencyProducts.filter((p) => p.id !== id) })),
+
+      agencyItineraries: deepClone(MockItineraries),
+      saveAgencyItinerary: (it) =>
+        set((state) => ({
+          agencyItineraries: state.agencyItineraries.some((x) => x.id === it.id)
+            ? state.agencyItineraries.map((x) => (x.id === it.id ? it : x))
+            : [it, ...state.agencyItineraries],
+        })),
+      deleteAgencyItinerary: (id) =>
+        set((state) => ({ agencyItineraries: state.agencyItineraries.filter((x) => x.id !== id) })),
+      submitAgencyItinerary: (id) =>
+        set((state) => ({
+          agencyItineraries: state.agencyItineraries.map((x) =>
+            x.id === id
+              ? {
+                  ...x,
+                  status: 'submitted',
+                  submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+                }
+              : x,
+          ),
+        })),
+      withdrawAgencyItinerary: (id) =>
+        set((state) => ({
+          agencyItineraries: state.agencyItineraries.map((x) =>
+            x.id === id
+              ? { ...x, status: 'draft', submittedAt: undefined }
+              : x,
+          ),
+        })),
+
+      agencyCertification: deepClone(MockCertification),
+      // 重新提交信息认证审核：进入"待审核"，旧认证信息继续生效（系统功能不受限）
+      submitCertification: (data) =>
+        set(() => ({
+          agencyCertification: {
+            ...data,
+            status: 'pending',
+            pendingData: data,
+            rejectReason: undefined,
+            submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          },
+        })),
+      // 模拟平台审核结果（演示环境用；正式开发由平台侧触发）
+      settleCertification: (result, reason) =>
+        set((state) => {
+          const c = state.agencyCertification
+          if (result === 'approved' && c.pendingData) {
+            return {
+              agencyCertification: {
+                ...c,
+                ...c.pendingData,
+                status: 'verified',
+                pendingData: undefined,
+                rejectReason: undefined,
+                verifiedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
+              },
+            }
+          }
+          return {
+            agencyCertification: {
+              ...c,
+              status: 'rejected',
+              rejectReason: reason ?? '材料不清晰或信息填写不完整，请修改后重新提交',
+            },
+          }
+        }),
+
+      agencyAccounts: deepClone(MockAgencyAccounts),
+      addAgencyAccount: (a) =>
+        set((state) => ({ agencyAccounts: [...state.agencyAccounts, a] })),
+      updateAgencyAccount: (id, patch) =>
+        set((state) => ({
+          agencyAccounts: state.agencyAccounts.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+        })),
+      deleteAgencyAccount: (id) =>
+        set((state) => ({ agencyAccounts: state.agencyAccounts.filter((a) => a.id !== id) })),
+
+      agencyLogs: deepClone(MockAgencyLogs),
+      appendAgencyLog: (log) =>
+        set((state) => ({ agencyLogs: [log, ...state.agencyLogs] })),
     }),
     {
       name: 'yqrq-store',
       // 数据版本：当 mock 数据结构发生变化时递增
       // 版本不匹配时，对应模块数据会被重置为最新 mock 数据
-      version: 18,
+      version: 25,
       migrate: (persistedState: any, version) => {
         // 版本 < 2：补贴管理 mock 数据结构调整（团队接待奖励由9行合并为3行）
         if (version < 2) {
@@ -873,6 +1028,59 @@ export const useStore = create<AppState>()(
             complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
           }
         }
+        // 版本 < 19：新增旅行社端工作台（设置中心/产品管理/电子行程单），初始化全部 mock 数据
+        if (version < 19) {
+          persistedState = {
+            ...persistedState,
+            agencyMerchants: deepClone(MockMerchants),
+            agencyProducts: deepClone(MockRouteProducts),
+            agencyItineraries: deepClone(MockItineraries),
+            agencyAccounts: deepClone(MockAgencyAccounts),
+            agencyLogs: deepClone(MockAgencyLogs),
+          }
+        }
+        // 版本 < 20：设置中心改版——资质管理+旅行社资料合并为"信息认证"（AgencyCertification），
+        // 个人资料扩展教育经历等字段；重置认证信息与账号数据，并清除废弃的 agencyQualification
+        if (version < 20) {
+          persistedState = {
+            ...persistedState,
+            agencyAccounts: deepClone(MockAgencyAccounts),
+            agencyCertification: deepClone(MockCertification),
+          }
+          delete (persistedState as Record<string, unknown>).agencyQualification
+        }
+        // 版本 < 21：产品线路改版——去掉所属分类/出发城市/卖价/同行价/图文介绍，
+        // 新增旅游地域/最低成团人数/发团结团地址/交通往返/四类单价（prices），重置产品数据
+        if (version < 21) {
+          persistedState = {
+            ...persistedState,
+            agencyProducts: deepClone(MockRouteProducts),
+          }
+        }
+        // 版本 < 22：商家管理拆分为景区景点/购物店/酒店住宿/餐饮服务/民宿五个菜单，
+        // 商家新增等级/企业信息/景区承载量字段并新增民宿类型，重置商家池数据
+        // 版本 < 23：补充本社景区演示商家（花溪十里河滩湿地公园）
+        if (version < 23) {
+          persistedState = {
+            ...persistedState,
+            agencyMerchants: deepClone(MockMerchants),
+          }
+        }
+        // 版本 < 24：电子行程单更名"团行程单"并优化——新增旅游地域/总晚数/每日日期/游客性别生日年龄，
+        // 行程明细三餐合并为用餐；重置行程单数据
+        if (version < 24) {
+          persistedState = {
+            ...persistedState,
+            agencyItineraries: deepClone(MockItineraries),
+          }
+        }
+        // 版本 < 25：补充行程单每日日期与总晚数演示数据
+        if (version < 25) {
+          persistedState = {
+            ...persistedState,
+            agencyItineraries: deepClone(MockItineraries),
+          }
+        }
         return persistedState
       },
       // 仅持久化数据字段，不持久化方法
@@ -909,6 +1117,13 @@ export const useStore = create<AppState>()(
         announcementCategories: state.announcementCategories,
         announcements: state.announcements,
         announcementReads: state.announcementReads,
+        // 旅行社端工作台
+        agencyMerchants: state.agencyMerchants,
+        agencyProducts: state.agencyProducts,
+        agencyItineraries: state.agencyItineraries,
+        agencyAccounts: state.agencyAccounts,
+        agencyCertification: state.agencyCertification,
+        agencyLogs: state.agencyLogs,
       }),
     },
   ),

@@ -49,6 +49,22 @@ import AnnouncementDetail from './pages/announcements/AnnouncementDetail'
 import AnnouncementForm from './pages/announcements/AnnouncementForm'
 import AnnouncementCategories from './pages/announcements/AnnouncementCategories'
 import AnnouncementBrowseList from './pages/announcements/AnnouncementBrowseList'
+// 旅行社端工作台（设置中心/产品管理/电子行程单，PRD 2026-09-08 V1.3）
+// 原资质管理 + 旅行社资料合并为"信息认证"
+import CertificationPage from './pages/agency/settings/Certification'
+import AccountsPage from './pages/agency/settings/Accounts'
+import { PersonalProfilePage } from './pages/agency/settings/ProfilePages'
+import OperationLogsPage from './pages/agency/settings/OperationLogs'
+import ProductList from './pages/agency/products/ProductList'
+import ProductForm from './pages/agency/products/ProductForm'
+import ProductDetail from './pages/agency/products/ProductDetail'
+// 商家管理：按类型拆分为五个独立菜单（景区景点/购物店/酒店住宿/餐饮服务/民宿），共用列表页
+import MerchantListPage from './pages/agency/merchants/MerchantListPage'
+import ContractPlaceholder from './pages/agency/contracts/ContractPlaceholder'
+import ItineraryList from './pages/agency/itineraries/ItineraryList'
+import ItineraryQueryList from './pages/agency/itineraries/ItineraryQueryList'
+import ItineraryForm from './pages/agency/itineraries/ItineraryForm'
+import ItineraryDetail from './pages/agency/itineraries/ItineraryDetail'
 
 export default function App() {
   return (
@@ -139,6 +155,34 @@ export default function App() {
           <Route path="announcements/new" element={<AnnouncementForm mode="new" />} />
           <Route path="announcements/edit/:id" element={<AnnouncementForm mode="edit" />} />
           <Route path="announcements/:id" element={<AnnouncementDetail />} />
+          {/* 旅行社端工作台（设置中心/产品管理/电子行程单，PRD 2026-09-08 V1.3）
+              原 /agency/settings/qualification、/agency/settings/company 重定向至信息认证 */}
+          <Route path="agency/settings/certification" element={<CertificationPage />} />
+          <Route path="agency/settings/qualification" element={<Navigate to="/agency/settings/certification" replace />} />
+          <Route path="agency/settings/company" element={<Navigate to="/agency/settings/certification" replace />} />
+          <Route path="agency/settings/accounts" element={<AccountsPage />} />
+          <Route path="agency/settings/profile" element={<PersonalProfilePage />} />
+          <Route path="agency/settings/logs" element={<OperationLogsPage />} />
+          {/* 商家管理拆分：景区景点/购物店/酒店住宿/餐饮服务/民宿；旧路径重定向至景区景点 */}
+          <Route path="agency/merchants" element={<Navigate to="/agency/merchants/scenic" replace />} />
+          <Route path="agency/merchants/scenic" element={<MerchantListPage type="scenic" />} />
+          <Route path="agency/merchants/shop" element={<MerchantListPage type="shop" />} />
+          <Route path="agency/merchants/hotel" element={<MerchantListPage type="hotel" />} />
+          <Route path="agency/merchants/restaurant" element={<MerchantListPage type="restaurant" />} />
+          <Route path="agency/merchants/homestay" element={<MerchantListPage type="homestay" />} />
+          <Route path="agency/products" element={<ProductList />} />
+          <Route path="agency/products/new" element={<ProductForm mode="new" />} />
+          <Route path="agency/products/:id/edit" element={<ProductForm mode="edit" />} />
+          <Route path="agency/products/:id" element={<ProductDetail />} />
+          {/* 团行程管理：团行程单 + 合同管理（占位，正式开发时接入既有功能） */}
+          <Route path="agency/contracts" element={<ContractPlaceholder />} />
+          <Route path="agency/itineraries" element={<ItineraryList />} />
+          <Route path="agency/itineraries/new" element={<ItineraryForm mode="new" />} />
+          <Route path="agency/itineraries/:id" element={<ItineraryDetail />} />
+          <Route path="agency/itineraries/:id/edit" element={<ItineraryForm mode="edit" />} />
+          {/* 团行程单查询（文旅厅只读，展示所有旅行社已提交的行程单） */}
+          <Route path="tour/itineraries" element={<ItineraryQueryList />} />
+          <Route path="tour/itineraries/:id" element={<ItineraryDetail readOnly showAgencyName />} />
           {/* 兜底 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
