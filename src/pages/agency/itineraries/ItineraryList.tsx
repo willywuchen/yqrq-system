@@ -35,8 +35,8 @@ export default function ItineraryList() {
   const [tourRegion, setTourRegion] = useState<TourRegion | undefined>()
   const [nature, setNature] = useState<ItineraryNature | undefined>()
   const [channel, setChannel] = useState<ItineraryChannel | undefined>()
-  const [departureRange, setDepartureRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
-  const [returnRange, setReturnRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
+  // 出团/结团合并为一个时间区间：起=出团时间，止=结团时间
+  const [tripRange, setTripRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [guideName, setGuideName] = useState('')
   const [guidePhone, setGuidePhone] = useState('')
 
@@ -57,16 +57,14 @@ export default function ItineraryList() {
         if (tourRegion && it.tourRegion !== tourRegion) return false
         if (nature && it.nature !== nature) return false
         if (channel && it.channel !== channel) return false
-        // 出团/结团时间按日期区间筛选
-        if (departureRange?.[0] && it.departureTime.slice(0, 10) < departureRange[0].format('YYYY-MM-DD')) return false
-        if (departureRange?.[1] && it.departureTime.slice(0, 10) > departureRange[1].format('YYYY-MM-DD')) return false
-        if (returnRange?.[0] && it.returnTime.slice(0, 10) < returnRange[0].format('YYYY-MM-DD')) return false
-        if (returnRange?.[1] && it.returnTime.slice(0, 10) > returnRange[1].format('YYYY-MM-DD')) return false
+        // 出团/结团时间按同一日期区间筛选
+        if (tripRange?.[0] && it.departureTime.slice(0, 10) < tripRange[0].format('YYYY-MM-DD')) return false
+        if (tripRange?.[1] && it.returnTime.slice(0, 10) > tripRange[1].format('YYYY-MM-DD')) return false
         if (guideName && !it.guides.some((g) => (g.guideNameSnapshot ?? '').includes(guideName))) return false
         if (guidePhone && !it.guides.some((g) => (g.guidePhoneSnapshot ?? '').includes(guidePhone))) return false
         return true
       }),
-    [rows, noKeyword, nameKeyword, status, tourRegion, nature, channel, departureRange, returnRange, guideName, guidePhone],
+    [rows, noKeyword, nameKeyword, status, tourRegion, nature, channel, tripRange, guideName, guidePhone],
   )
 
   const handleReset = () => {
@@ -76,8 +74,7 @@ export default function ItineraryList() {
     setTourRegion(undefined)
     setNature(undefined)
     setChannel(undefined)
-    setDepartureRange(null)
-    setReturnRange(null)
+    setTripRange(null)
     setGuideName('')
     setGuidePhone('')
   }
@@ -173,7 +170,19 @@ export default function ItineraryList() {
         <a onClick={() => navigate(`/agency/itineraries/${r.id}`)}>{v}</a>
       ),
     },
-    { title: '行程名称', dataIndex: 'name', ellipsis: true },
+    { title: '行程名称', dataIndex: 'name', width: 220, ellipsis: true },
+    {
+      title: '旅游地域',
+      dataIndex: 'tourRegion',
+      width: 90,
+      render: (v: TourRegion) => TourRegionLabels[v] ?? '—',
+    },
+    {
+      title: '行程性质',
+      dataIndex: 'nature',
+      width: 90,
+      render: (v: ItineraryNature) => ItineraryNatureLabels[v] ?? '—',
+    },
     {
       title: '关联线路产品',
       dataIndex: 'productNameSnapshot',
@@ -309,14 +318,9 @@ export default function ItineraryList() {
             }))}
           />
           <DatePicker.RangePicker
-            placeholder={['出团时间起', '出团时间止']}
-            value={departureRange}
-            onChange={(v) => setDepartureRange(v as [Dayjs | null, Dayjs | null] | null)}
-          />
-          <DatePicker.RangePicker
-            placeholder={['结团时间起', '结团时间止']}
-            value={returnRange}
-            onChange={(v) => setReturnRange(v as [Dayjs | null, Dayjs | null] | null)}
+            placeholder={['出团时间', '结团时间']}
+            value={tripRange}
+            onChange={(v) => setTripRange(v as [Dayjs | null, Dayjs | null] | null)}
           />
           <Select
             allowClear
@@ -351,7 +355,7 @@ export default function ItineraryList() {
           rowKey="id"
           columns={columns}
           dataSource={filtered}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1940 }}
           pagination={{ showTotal: (t) => `共 ${t} 条` }}
           locale={{
             emptyText: (
