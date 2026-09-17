@@ -21,6 +21,10 @@ import ComplaintDetail from './pages/complaints/ComplaintDetail'
 import ComplaintDashboard from './pages/complaints/ComplaintDashboard'
 import ComplaintReportList from './pages/complaints/ComplaintReportList'
 import ComplaintReportPreview from './pages/complaints/ComplaintReportPreview'
+// 投诉管理处置（独立模块：游客扫码投诉/一团一码 → 市州处置 → 省厅督办）
+import ComplaintDisposalEntry from './pages/complaint-disposal/ComplaintDisposalEntry'
+import DisposalOverview from './pages/complaint-disposal/DisposalOverview'
+import DisposalDetail from './pages/complaint-disposal/DisposalDetail'
 import OpinionList from './pages/opinions/OpinionList'
 import OpinionForm from './pages/opinions/OpinionForm'
 import OpinionDetail from './pages/opinions/OpinionDetail'
@@ -115,8 +119,13 @@ export default function App() {
           <Route path="complaints/dashboard" element={<ComplaintDashboard />} />
       <Route path="complaints/reports" element={<ComplaintReportList />} />
       <Route path="complaints/reports/:id" element={<ComplaintReportPreview />} />
-      <Route path="complaints/:id" element={<ComplaintDetail />} />
+          <Route path="complaints/:id" element={<ComplaintDetail />} />
           <Route path="complaints/:id/edit" element={<ComplaintForm mode="edit" />} />
+          {/* 投诉管理处置（独立于投诉台账；数据来自游客扫码投诉与一团一码）
+              /complaint-disposal 按角色分流：市州文旅局 → 处置工作台；省级账号 → 全省投诉列表 */}
+          <Route path="complaint-disposal" element={<ComplaintDisposalEntry />} />
+          <Route path="complaint-disposal/overview" element={<DisposalOverview />} />
+          <Route path="complaint-disposal/:id" element={<DisposalDetail />} />
           {/* 舆情管理分析 */}
           <Route path="public-opinion" element={<OpinionList />} />
           <Route path="public-opinion/new" element={<OpinionForm mode="new" />} />

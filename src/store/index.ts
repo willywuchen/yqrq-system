@@ -3,6 +3,10 @@ import { persist } from 'zustand/middleware'
 import type { Application, Attachment, Complaint, Message, UserRole, PublicOpinion, OpinionWarningRule, OpinionWarning, OpinionReport, OpinionHandleStatus, OpinionHandleLog, SubsidyApplication, SubsidyOperationLog, ComplaintReport, ComplaintReportTemplate, ComplaintReportArchiveLog } from '../types'
 import { getDefaultReportTemplates } from '../types'
 import { MockApplications, MockComplaints, MockMessages, MockEnterpriseCertificates, MockPublicOpinions, MockOpinionWarningRules, MockOpinionWarnings, MockOpinionReports, MockSubsidyApplications, MockSubsidyOperationLogs, MockComplaintReports, MockComplaintReportTemplates, MockComplaintReportArchiveLogs } from '../mock/data'
+import type { DisposalComplaint } from '../types/complaint-disposal'
+import { PROVINCE_ORG_NAME } from '../types/complaint-disposal'
+import { MockDisposalComplaints } from '../mock/complaint-disposal'
+import { nowStr } from '../utils'
 import type {
   Vehicle,
   TrackPoint,
@@ -67,6 +71,8 @@ const DEMO_SNAPSHOT = {
   complaintReports: deepClone(MockComplaintReports),
   complaintReportTemplates: deepClone(MockComplaintReportTemplates),
   complaintReportArchiveLogs: deepClone(MockComplaintReportArchiveLogs),
+  // 投诉管理处置（独立模块）
+  disposalComplaints: deepClone(MockDisposalComplaints),
   // 旅游包车智慧监管
   vehicles: deepClone(MockVehicles),
   tracks: deepClone(MockTracks),
@@ -181,6 +187,14 @@ interface AppState {
   appendComplaintReportLog: (log: ComplaintReportArchiveLog) => void
   updateComplaintReportTemplate: (templateId: string, patch: Partial<ComplaintReportTemplate>) => void
   restoreDefaultTemplates: () => void
+
+  // ========== 投诉管理处置（独立于投诉台账：扫码投诉/一团一码 → 市州处置 → 省厅督办） ==========
+  disposalComplaints: DisposalComplaint[]
+  addDisposalComplaint: (complaint: DisposalComplaint) => void
+  // 市州提交处置：状态置为已处置并写入处置记录，计时随之停止（result 支持预设项或手动输入文本；attachments 为佐证附件文件名，非必填）
+  disposeDisposalComplaint: (id: string, result: string, description: string, attachments?: string[]) => void
+  // 省文旅厅督办：向待处置投诉追加一条督办记录（可多次催办）
+  superviseDisposalComplaint: (id: string, note: string) => void
 
   // ========== 旅游包车智慧监管 ==========
   // 当前用户的监管层级（仅 final_reviewer / admin 角色启用）
@@ -353,6 +367,8 @@ export const useStore = create<AppState>()(
           complaintReports: [],
           complaintReportArchiveLogs: [],
           complaintReportTemplates: getDefaultReportTemplates(),
+          // 投诉管理处置：清空投诉数据
+          disposalComplaints: [],
           // 旅游包车智慧监管：仅清空业务数据，保留规则模板
           vehicles: [],
           tracks: [],
@@ -397,6 +413,8 @@ export const useStore = create<AppState>()(
         complaintReports: deepClone(DEMO_SNAPSHOT.complaintReports),
         complaintReportTemplates: deepClone(DEMO_SNAPSHOT.complaintReportTemplates),
         complaintReportArchiveLogs: deepClone(DEMO_SNAPSHOT.complaintReportArchiveLogs),
+        // 投诉管理处置
+        disposalComplaints: deepClone(DEMO_SNAPSHOT.disposalComplaints),
           // 旅游包车智慧监管
           vehicles: deepClone(DEMO_SNAPSHOT.vehicles),
           tracks: deepClone(DEMO_SNAPSHOT.tracks),
@@ -569,6 +587,50 @@ export const useStore = create<AppState>()(
         })),
       restoreDefaultTemplates: () =>
         set({ complaintReportTemplates: getDefaultReportTemplates() }),
+
+      // ========== 投诉管理处置 ==========
+      disposalComplaints: MockDisposalComplaints,
+      addDisposalComplaint: (complaint) =>
+        set((state) => ({ disposalComplaints: [complaint, ...state.disposalComplaints] })),
+      disposeDisposalComplaint: (id, result, description, attachments) =>
+        set((state) => ({
+          disposalComplaints: state.disposalComplaints.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  status: 'disposed' as const,
+                  disposal: {
+                    result,
+                    description,
+                    attachments: attachments && attachments.length > 0 ? attachments : undefined,
+                    handler: state.currentUser.name,
+                    handlerOrg: state.currentUser.org ?? '',
+                    disposedAt: nowStr(),
+                  },
+                }
+              : c,
+          ),
+        })),
+      superviseDisposalComplaint: (id, note) =>
+        set((state) => ({
+          disposalComplaints: state.disposalComplaints.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  supervisions: [
+                    ...c.supervisions,
+                    {
+                      id: `DB${Date.now()}`,
+                      supervisor: state.currentUser.name,
+                      supervisorOrg: PROVINCE_ORG_NAME,
+                      note,
+                      time: nowStr(),
+                    },
+                  ],
+                }
+              : c,
+          ),
+        })),
 
       // ========== 旅游包车智慧监管 ==========
       // 默认省级视角（final_reviewer / admin 角色）
@@ -857,7 +919,7 @@ export const useStore = create<AppState>()(
       name: 'yqrq-store',
       // 数据版本：当 mock 数据结构发生变化时递增
       // 版本不匹配时，对应模块数据会被重置为最新 mock 数据
-      version: 25,
+      version: 28,
       migrate: (persistedState: any, version) => {
         // 版本 < 2：补贴管理 mock 数据结构调整（团队接待奖励由9行合并为3行）
         if (version < 2) {
@@ -1081,6 +1143,27 @@ export const useStore = create<AppState>()(
             agencyItineraries: deepClone(MockItineraries),
           }
         }
+        // 版本 < 26：新增投诉管理处置模块（独立于投诉台账），初始化 mock 数据
+        if (version < 26) {
+          persistedState = {
+            ...persistedState,
+            disposalComplaints: deepClone(MockDisposalComplaints),
+          }
+        }
+        // 版本 < 27：处置记录新增佐证附件（非必填）与演示数据，重置投诉管理处置数据
+        if (version < 27) {
+          persistedState = {
+            ...persistedState,
+            disposalComplaints: deepClone(MockDisposalComplaints),
+          }
+        }
+        // 版本 < 28：新增区县文旅局角色与区县级演示数据（花溪区），重置投诉管理处置数据
+        if (version < 28) {
+          persistedState = {
+            ...persistedState,
+            disposalComplaints: deepClone(MockDisposalComplaints),
+          }
+        }
         return persistedState
       },
       // 仅持久化数据字段，不持久化方法
@@ -1099,6 +1182,8 @@ export const useStore = create<AppState>()(
         complaintReports: state.complaintReports,
         complaintReportTemplates: state.complaintReportTemplates,
         complaintReportArchiveLogs: state.complaintReportArchiveLogs,
+        // 投诉管理处置
+        disposalComplaints: state.disposalComplaints,
         // 旅游包车智慧监管
         coachRegionLevel: state.coachRegionLevel,
         vehicles: state.vehicles,

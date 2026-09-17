@@ -63,3 +63,8 @@ body {
 .ant-menu-dark .ant-badge {
   color: inherit;
 }
+
+/* 投诉管理处置：待处置且被省厅督办的投诉行，浅红底提示优先处置 */
+.complaint-supervised-row > td {
+  background: #fff1f0 !important;
+}

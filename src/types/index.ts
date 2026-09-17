@@ -164,7 +164,9 @@ export const StatusColors: Record<ApplicationStatus, string> = {
 };
 
 // ========== 用户角色 ==========
-export type UserRole = 'applicant' | 'initial_reviewer' | 'review_reviewer' | 'final_reviewer' | 'third_party_reviewer' | 'admin';
+// city_bureau：市州文旅局（投诉管理处置模块专属角色，负责本市州投诉的处置，与奖励管理无关）
+// district_bureau：区县文旅局（投诉管理处置模块专属角色，处置本区县接收的投诉，市州可查看并处置区县级数据）
+export type UserRole = 'applicant' | 'initial_reviewer' | 'review_reviewer' | 'final_reviewer' | 'third_party_reviewer' | 'city_bureau' | 'district_bureau' | 'admin';
 
 export const UserRoleLabels: Record<UserRole, string> = {
   applicant: '旅行社',
@@ -172,6 +174,8 @@ export const UserRoleLabels: Record<UserRole, string> = {
   review_reviewer: '市州复审员',
   final_reviewer: '文旅厅',
   third_party_reviewer: '第三方查验',
+  city_bureau: '市州文旅局',
+  district_bureau: '区县文旅局',
   admin: '系统管理员',
 };
 

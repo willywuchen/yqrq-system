@@ -34,6 +34,7 @@ import {
   ShoppingOutlined,
   BankOutlined,
   CoffeeOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useStore } from '../store'
@@ -139,6 +140,25 @@ const tourManagementMenu = {
   ],
 }
 
+// 投诉管理处置 - 一级菜单（独立于投诉台账；数据来自游客扫码投诉与一团一码）
+// 区县/市州文旅局处置所辖区域投诉（无需受理、直接处置，市州含区县级）；省文旅厅查看全部数据并督办
+const complaintDisposalCityMenu = {
+  key: 'complaint-disposal-management',
+  icon: <CustomerServiceOutlined />,
+  label: '投诉处置管理',
+  children: [{ key: '/complaint-disposal', icon: <AuditOutlined />, label: '处置工作台' }],
+}
+
+const complaintDisposalProvinceMenu = {
+  key: 'complaint-disposal-management',
+  icon: <CustomerServiceOutlined />,
+  label: '投诉处置管理',
+  children: [
+    { key: '/complaint-disposal', icon: <FileTextOutlined />, label: '全省投诉' },
+    { key: '/complaint-disposal/overview', icon: <BarChartOutlined />, label: '处置总览' },
+  ],
+}
+
 const roleMenuMap: Record<UserRole, any[]> = {
   applicant: [
     {
@@ -237,6 +257,8 @@ const roleMenuMap: Record<UserRole, any[]> = {
         { key: '/complaints/reports', icon: <FileTextOutlined />, label: '数据报表' },
       ],
     },
+    // 投诉管理处置（省级视角：查看全省投诉数据，督办各市州处置）
+    complaintDisposalProvinceMenu,
     // 团行程单查询（文旅厅只读：所有旅行社已提交的团行程单）
     {
       key: '/tour/itineraries',
@@ -264,6 +286,10 @@ const roleMenuMap: Record<UserRole, any[]> = {
       ],
     },
   ],
+  // 市州文旅局：投诉管理处置模块专属角色，处置本市州接收的游客投诉（含区县级投诉）
+  city_bureau: [complaintDisposalCityMenu],
+  // 区县文旅局：投诉管理处置模块专属角色，处置本区县接收的游客投诉
+  district_bureau: [complaintDisposalCityMenu],
   admin: [
     {
       key: 'reward-management',
@@ -288,6 +314,8 @@ const roleMenuMap: Record<UserRole, any[]> = {
         { key: '/complaints/reports', icon: <FileTextOutlined />, label: '数据报表' },
       ],
     },
+    // 投诉管理处置（省级视角）
+    complaintDisposalProvinceMenu,
     {
       key: 'opinion-management',
       icon: <RadarChartOutlined />,
@@ -321,6 +349,8 @@ const roleUsers: { role: UserRole; name: string; org?: string }[] = [
   { role: 'review_reviewer', name: '刘强' },
   { role: 'final_reviewer', name: '陈华' },
   { role: 'third_party_reviewer', name: '赵敏' },
+  { role: 'city_bureau', name: '杨静', org: '贵阳市文化和旅游局' },
+  { role: 'district_bureau', name: '林岚', org: '贵阳市花溪区文化和旅游局' },
   { role: 'admin', name: '管理员' },
 ]
 
