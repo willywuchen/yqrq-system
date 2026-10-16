@@ -1,7 +1,6 @@
 // 省文旅厅 / 系统管理员 - 全省投诉列表（查看全部数据，督办各市州待处置投诉）
 import { useMemo, useState } from 'react'
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -237,14 +236,6 @@ export default function ProvinceComplaintList() {
         }
       />
       <PageContainer>
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="省级视角：全省投诉数据总览"
-          description="可查看全省各市州/区县接收的全部游客投诉（服务质量码 / 一团一码）。市州、区县接收后无需受理、直接处置，处置完成前系统持续动态计时；对处置迟缓的投诉，省级可向所属市州文旅局发起督办（可多次催办），督办记录同步展示至处置工作台。"
-        />
-
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col xs={12} md={6}>
             <Card className="stat-card">

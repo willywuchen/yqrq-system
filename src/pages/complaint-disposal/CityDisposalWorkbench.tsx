@@ -325,18 +325,6 @@ export default function CityDisposalWorkbench() {
         }
       />
       <PageContainer>
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={`当前账号：${currentUser.org}（${isDistrictRole ? `${scopeCity} · ${scopeDistrict}` : scopeCity}）`}
-          description={
-            isDistrictRole
-              ? '游客通过「贵州旅游服务质量码」或「一团一码」提交投诉后，系统按所诉区域自动分派至本区县文旅局，无需受理、直接处置。投诉无处置时限要求，但自接收起持续动态计时，完成处置后计时停止；省文旅厅督办件请优先处置（列表中以浅红底色标示）。'
-              : '游客通过「贵州旅游服务质量码」或「一团一码」提交投诉后，系统按所诉区域自动分派至本市州文旅局（含区县），无需受理、直接处置。投诉无处置时限要求，但自接收起持续动态计时，完成处置后计时停止；省文旅厅督办件请优先处置（列表中以浅红底色标示）。'
-          }
-        />
-
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col xs={12} md={6}>
             <Card className="stat-card">
